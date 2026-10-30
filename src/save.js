@@ -1,6 +1,6 @@
 // Speichern im localStorage (pro Gerät/Browser) plus Export/Import als Text-Code.
 
-import { SAVE_VERSION } from './sim.js';
+import { SAVE_VERSION, migrate } from './sim.js';
 
 const KEY = 'fantasycrafter.save';
 
@@ -19,7 +19,8 @@ export function loadGame() {
     const raw = localStorage.getItem(KEY);
     if (!raw) return null;
     const data = JSON.parse(raw);
-    if (data?.state?.version !== SAVE_VERSION) return null;
+    if (!data?.state?.version || data.state.version > SAVE_VERSION) return null;
+    migrate(data.state);
     return data;
   } catch {
     return null;
@@ -38,6 +39,7 @@ export function exportCode(state, speed) {
 export function importCode(code) {
   const json = decodeURIComponent(escape(atob(code.trim())));
   const data = JSON.parse(json);
-  if (data?.state?.version !== SAVE_VERSION) throw new Error('Unbekannte Spielstand-Version');
+  if (!data?.state?.version || data.state.version > SAVE_VERSION) throw new Error('Unbekannte Spielstand-Version');
+  migrate(data.state);
   return data;
 }
