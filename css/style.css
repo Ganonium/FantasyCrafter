@@ -50,7 +50,6 @@ header .title { font-size: 14px; white-space: nowrap; overflow: hidden; text-ove
   display: block;
   width: 100%;
   aspect-ratio: 200 / 112;
-  image-rendering: pixelated;
   border-bottom: 2px solid var(--line);
   cursor: pointer;
 }
@@ -160,13 +159,13 @@ button.wide { width: 100%; margin-top: 14px; padding: 9px; }
 
 /* Helden */
 .hero { display: flex; gap: 10px; cursor: pointer; }
-.hero .mini { width: 54px; height: 81px; image-rendering: pixelated; background: #1f1a14; border-radius: 6px; flex: none; }
+.hero .mini { width: 54px; height: 81px; background: radial-gradient(circle at 50% 40%, #3a3024, #1f1a14); border-radius: 6px; flex: none; }
 .hero .hinfo { flex: 1; min-width: 0; }
 .thought { font-style: italic; color: #e6d6b6; font-size: 13px; margin-top: 3px; }
 .thought.big { font-size: 15px; background: var(--card); border-left: 3px solid var(--accent); padding: 8px 10px; margin: 10px 0; border-radius: 4px; }
 .herohead { display: flex; gap: 12px; align-items: flex-start; }
 .herohead h2 { margin-top: 0; }
-#portrait { width: 108px; height: 162px; image-rendering: pixelated; background: radial-gradient(#3a3024, #1f1a14); border-radius: 8px; flex: none; }
+#portrait { width: 120px; height: 170px; background: radial-gradient(#3a3024, #1f1a14); border-radius: 8px; flex: none; }
 .bar.xp { height: 4px; }
 
 /* Dialog */

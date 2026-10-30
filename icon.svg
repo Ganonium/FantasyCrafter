@@ -1,11 +1,17 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" shape-rendering="crispEdges">
-  <rect width="16" height="16" rx="3" fill="#2a2018"/>
-  <rect x="3" y="9" width="10" height="2" fill="#5a5a66"/>
-  <rect x="5" y="11" width="6" height="2" fill="#4a4a56"/>
-  <rect x="2" y="8" width="3" height="1" fill="#5a5a66"/>
-  <rect x="4" y="13" width="8" height="1" fill="#3a3a44"/>
-  <rect x="9" y="2" width="2" height="5" fill="#e0b040"/>
-  <rect x="8" y="2" width="4" height="2" fill="#f0c860"/>
-  <rect x="6" y="6" width="1" height="1" fill="#ffb040"/>
-  <rect x="12" y="6" width="1" height="1" fill="#ffb040"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="35%" r="70%"><stop offset="0" stop-color="#4a3624"/><stop offset="1" stop-color="#1b1712"/></radialGradient>
+    <linearGradient id="steel" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#9aa0ae"/><stop offset="1" stop-color="#4a4e5a"/></linearGradient>
+    <radialGradient id="spark" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#ffe9a0"/><stop offset="1" stop-color="#ff9a30" stop-opacity="0"/></radialGradient>
+  </defs>
+  <rect width="64" height="64" rx="14" fill="url(#bg)"/>
+  <circle cx="34" cy="30" r="14" fill="url(#spark)"/>
+  <g stroke="#2a1c14" stroke-width="2" stroke-linejoin="round">
+    <path d="M10 34 H50 Q52 40 44 41 H38 L40 48 H24 L26 41 H20 Q14 40 10 34 Z" fill="url(#steel)"/>
+    <rect x="20" y="48" width="24" height="5" rx="2" fill="#5a3a24"/>
+    <g transform="rotate(-35 36 20)">
+      <rect x="34" y="14" width="4" height="22" rx="2" fill="#8a5a34"/>
+      <rect x="27" y="8" width="18" height="8" rx="2.5" fill="#e6b84a"/>
+    </g>
+  </g>
 </svg>

@@ -75,7 +75,7 @@ Drachen traut, gibt es keine Drachenschuppen. Genauso fehlt die Spinnenseide, we
 
 ## Darstellung
 
-- Dorfszene als Pixel-Canvas mit Tag/Nacht. Helden, die im Dorf sind, laufen herum; nachts sind sie in der Taverne.
+- Dorfszene als gezeichnete Vektorgrafik (Canvas, Bilderbuch-Stil mit Konturen und Verläufen) mit Tag/Nacht. Helden, die im Dorf sind, laufen herum; nachts sind sie in der Taverne.
 - **Die Helden tragen sichtbar, was du ihnen verkauft hast**: Rüstungsfarbe, Helm, Kapuze oder Hut und die Waffe
   ändern sich je Stufe. Antippen öffnet die Heldenkarte mit großem Porträt.
 - Rauch und Glut in der Esse, wenn gearbeitet wird; Waren im Schaufenster; Zettel am Auftragsbrett.
