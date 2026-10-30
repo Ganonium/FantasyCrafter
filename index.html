@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>FantasyCrafter</title>
+  <meta name="description" content="Führe einen Ausrüstungsladen in Eichenfurt – die Helden entscheiden selbst.">
+  <meta name="theme-color" content="#1b1712">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div id="app">
+    <header>
+      <div class="title">⚒️ <b>Goldener Amboss</b></div>
+      <div class="hud">
+        <span class="gold">🪙 <b id="gold">0</b></span>
+        <span id="clock" class="dim"></span>
+        <button id="speed" class="speed" title="Spieltempo">1×</button>
+        <button id="settings" class="icon" title="Einstellungen">⚙️</button>
+      </div>
+    </header>
+    <canvas id="scene" aria-label="Das Dorf Eichenfurt"></canvas>
+    <main id="panel"></main>
+    <nav id="nav"></nav>
+  </div>
+  <div id="modal" hidden><div id="modal-body"></div></div>
+  <noscript>FantasyCrafter braucht JavaScript.</noscript>
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>
