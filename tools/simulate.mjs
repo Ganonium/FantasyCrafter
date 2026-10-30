@@ -2,8 +2,10 @@
 // Aufruf: node tools/simulate.mjs [tage] [seed] [--log]
 
 import { newGame, advance, queueCraft, buyMaterial, postBounty, upgrade, canUpgrade, upgradeCost, building,
-  heroPower, clockOf } from '../src/sim.js';
+  heroPower, clockOf, resolveEvent, acceptOrder, buildProject, afterAction } from '../src/sim.js';
 import { RECIPES, MATERIALS, AREAS } from '../src/data.js';
+import { EVENT_BY_ID } from '../src/events.js';
+import { PROJECTS } from '../src/goals.js';
 
 const days = Number(process.argv[2] ?? 14);
 const seed = Number(process.argv[3] ?? 42);
@@ -14,6 +16,24 @@ const s = newGame(seed);
 const VISITS = [7 * 60, 10 * 60, 13 * 60, 17 * 60, 21 * 60]; // Uhrzeiten der Besuche
 
 function botVisit() {
+  // Ereignis: zufällige bezahlbare Option
+  if (s.event) {
+    const n = EVENT_BY_ID[s.event.id].options.length;
+    for (let tries = 0; tries < 5 && s.event; tries++) resolveEvent(s, Math.floor(Math.random() * n));
+    if (s.event) resolveEvent(s, n - 1);
+  }
+  // Bestellungen annehmen und einplanen
+  for (const o of s.orders) {
+    if (o.state === 'offered') acceptOrder(s, o.id);
+    for (const l of o.lines) {
+      const planned = s.queue.filter((q) => q === l.recipe).length + s.slots.filter((j) => j?.recipe === l.recipe).length;
+      for (let i = planned; i < l.qty - l.filled; i++) {
+        for (const [m, n] of Object.entries(RECIPES[l.recipe].mats)) if (MATERIALS[m].basic && s.mats[m] < n) buyMaterial(s, m, n - s.mats[m]);
+        queueCraft(s, l.recipe);
+      }
+    }
+  }
+  for (const id of Object.keys(PROJECTS)) if (s.gold > PROJECTS[id].cost + 300) buildProject(s, id);
   for (const id of ['schmiede', 'laden', 'taverne', 'lager']) if (canUpgrade(s, id) && s.gold > 150) upgrade(s, id);
   const next = upgradeCost(s, 'schmiede');
   for (const [m, n] of Object.entries(next ?? {})) {
@@ -44,6 +64,7 @@ function botVisit() {
   }
   const potions = s.shelf.filter((x) => x.recipe === 'heiltrank').length + s.queue.filter((x) => x === 'heiltrank').length;
   if (potions < 3) { buyMaterial(s, 'kraeuter', 4); queueCraft(s, 'heiltrank'); queueCraft(s, 'heiltrank'); }
+  afterAction(s);
 }
 
 let logIdx = 0;
@@ -64,6 +85,7 @@ for (let d = 0; d < days; d++) {
     `Kopfgelder ${s.bounties.length}, Regal ${s.shelf.length} | ${hs}`);
 }
 console.log('Stats', s.stats);
+console.log('Ziel-Index', s.goalIndex, 'Projekte', Object.keys(s.projects).join(','));
 const rare = Object.keys(AREAS).map((a) => AREAS[a].mat).filter(Boolean).map((m) => `${m}:${s.mats[m]}`).join(' ');
 console.log('Seltene Materialien', rare);
 

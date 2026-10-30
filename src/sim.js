@@ -7,13 +7,17 @@ import {
 } from './data.js';
 import { makeRng } from './rng.js';
 import { T, THOUGHTS, fmt } from './text.js';
+import { EVENTS, EVENT_BY_ID } from './events.js';
+import { GOALS, PROJECTS } from './goals.js';
 
-export const SAVE_VERSION = 1;
-const LOG_LIMIT = 400;
+export const SAVE_VERSION = 2;
+const LOG_LIMIT = 500;
 const NIGHT_START = 22 * 60;
 const NIGHT_END = 6 * 60;
+const EVENT_WAIT = 6 * 60; // so lange wartet ein Ereignis auf deine Entscheidung
+const OFFER_WAIT = 8 * 60; // so lange liegt ein Bestellangebot aus
 
-// ---------- Neues Spiel ----------
+// ---------- Neues Spiel / Migration ----------
 
 export function newGame(seed = Date.now(), clockMinute = 8 * 60) {
   const s = {
@@ -38,10 +42,34 @@ export function newGame(seed = Date.now(), clockMinute = 8 * 60) {
     stats: { sold: 0, earned: 0, repairs: 0, adventures: 0, successes: 0, crafted: 0 },
   };
   s.mats.eisen = 12; s.mats.holz = 10; s.mats.stoff = 8; s.mats.kraeuter = 6;
+  addV2Fields(s);
   const r = makeRng(s);
-  const classes = ['krieger', 'waldlaeufer', 'magier'];
-  for (const cls of classes) addHero(s, r, { cls, silent: true });
+  for (const cls of ['krieger', 'waldlaeufer', 'magier']) addHero(s, r, { cls, silent: true });
   log(s, 'info', 'Willkommen in **Eichenfurt**! Dein Laden hat geöffnet. Drei Helden sitzen schon in der Taverne und warten auf Ausrüstung.');
+  return s;
+}
+
+function addV2Fields(s) {
+  s.effects ??= [];
+  s.event ??= null;
+  s.nextEvent ??= s.t + 150;
+  s.recentEvents ??= [];
+  s.orders ??= [];
+  s.nextOrder ??= s.t + 90;
+  s.goalIndex ??= 0;
+  s.projects ??= {};
+  s.recent ??= {};
+  s.stats.delivered ??= {};
+  s.stats.areaWins ??= {};
+  s.stats.ordersDone ??= 0;
+  s.stats.bountiesPosted ??= 0;
+}
+
+export function migrate(s) {
+  if (s.version === 1) {
+    addV2Fields(s);
+    s.version = 2;
+  }
   return s;
 }
 
@@ -66,11 +94,49 @@ function log(s, kind, text, heroId = null) {
   if (s.log.length > LOG_LIMIT) s.log.splice(0, s.log.length - LOG_LIMIT);
 }
 
+// Zufälliger Text, der die letzten Varianten derselben Sorte meidet
+function say(s, r, key, arr) {
+  if (arr.length === 1) return arr[0];
+  const recent = (s.recent[key] ??= []);
+  const avoid = recent.slice(-Math.min(arr.length - 1, 5));
+  const options = arr.map((_, i) => i).filter((i) => !avoid.includes(i));
+  const idx = r.pick(options);
+  recent.push(idx);
+  if (recent.length > 8) recent.shift();
+  return arr[idx];
+}
+
 function areaVars(areaId, extra = {}) {
   const a = AREAS[areaId];
   const In = a.in.charAt(0).toUpperCase() + a.in.slice(1);
   return { A: a.name, zu: a.zu, in: a.in, In, aus: a.aus, F: a.foe, M: a.mat ? MATERIALS[a.mat].name : 'Gold', ...extra };
 }
+
+// ---------- Effekte (Ereignisse + Dorfprojekte) ----------
+
+const ADDITIVE = new Set(['priceTol', 'moodHour']);
+
+export function effectVal(s, key, { area = null, mat = null } = {}) {
+  const add = ADDITIVE.has(key);
+  let v = add ? 0 : 1;
+  const apply = (m) => {
+    if (m.key !== key || (m.area && m.area !== area) || (m.mat && m.mat !== mat)) return;
+    v = add ? v + m.v : v * m.v;
+  };
+  for (const e of s.effects) if (e.until > s.t) e.mods.forEach(apply);
+  for (const id of Object.keys(s.projects)) PROJECTS[id].mods.forEach(apply);
+  return v;
+}
+
+export function activeEffects(s) {
+  return s.effects.filter((e) => e.until > s.t);
+}
+
+function addEffect(s, { label, icon, dur, mods, tag = null }) {
+  s.effects.push({ label, icon, until: s.t + dur, mods, tag });
+}
+
+// ---------- Helden ----------
 
 export function heroPower(h) {
   const w = h.weapon ? RECIPES[h.weapon].tier : 0;
@@ -78,8 +144,12 @@ export function heroPower(h) {
   return 3 + h.level * 2 + WEAPON_POWER[w] + ARMOR_POWER[a];
 }
 
-export function successChance(h, areaId) {
-  const ratio = heroPower(h) / AREAS[areaId].danger;
+export function areaDanger(s, areaId) {
+  return AREAS[areaId].danger * (s ? effectVal(s, 'danger', { area: areaId }) : 1);
+}
+
+export function successChance(h, areaId, s = null) {
+  const ratio = heroPower(h) / areaDanger(s, areaId);
   const p = 1 / (1 + Math.exp(-(ratio - 1) * 4));
   return Math.min(0.97, Math.max(0.02, p));
 }
@@ -87,6 +157,10 @@ export function successChance(h, areaId) {
 export function priceOf(s, recipeId) {
   const lvl = s.prices[recipeId] ?? 1;
   return Math.max(1, Math.round(fairPrice(recipeId) * PRICE_LEVELS[lvl].mult));
+}
+
+export function matPrice(s, mat) {
+  return Math.max(1, Math.round(MATERIALS[mat].price * effectVal(s, 'matPrice', { mat })));
 }
 
 export function xpNeeded(level) {
@@ -97,14 +171,14 @@ export function heroLabel(h) {
   return `${h.name} (${className(h.cls, h.female)}, St. ${h.level})`;
 }
 
-// ---------- Helden ----------
-
 function addHero(s, r, { cls, silent = false, level = 1 } = {}) {
   const female = r.chance(0.5);
   const used = new Set(s.heroes.map((h) => h.name.split(' ')[0]));
   const pool = (female ? NAMES_F : NAMES_M).filter((n) => !used.has(n));
   const first = r.pick(pool.length ? pool : female ? NAMES_F : NAMES_M);
-  const name = r.chance(0.35) ? `${first} ${r.pick(EPITHETS)}` : first;
+  const usedEpithets = new Set(s.heroes.map((h) => h.name.split(' ').slice(1).join(' ')));
+  const epithets = EPITHETS.filter((e) => !usedEpithets.has(e));
+  const name = r.chance(0.35) && epithets.length ? `${first} ${r.pick(epithets)}` : first;
   cls ??= r.pick(['krieger', 'waldlaeufer', 'magier']);
 
   const traitIds = Object.keys(TRAITS);
@@ -140,7 +214,7 @@ function addHero(s, r, { cls, silent = false, level = 1 } = {}) {
     for (const [id, rc] of own) if (r.chance(0.6)) h[rc.slot] = id;
   }
   s.heroes.push(h);
-  if (!silent) log(s, 'arrive', fmt(r.pick(T.arrive), h), h.id);
+  if (!silent) log(s, 'arrive', fmt(say(s, r, 'arrive', T.arrive), h), h.id);
   return h;
 }
 
@@ -160,8 +234,8 @@ function changeMood(h, d) {
 export function evaluateAreas(s, h) {
   const res = [];
   for (const [id, a] of Object.entries(AREAS)) {
-    const p = successChance(h, id);
-    const avgGold = (a.gold[0] + a.gold[1]) / 2;
+    const p = successChance(h, id, s);
+    const avgGold = ((a.gold[0] + a.gold[1]) / 2) * effectVal(s, 'gold', { area: id });
     let bountyPer = 0;
     let bountyLeft = 0;
     if (a.mat) {
@@ -196,6 +270,23 @@ export function evaluateAreas(s, h) {
   return res;
 }
 
+function priceTolerance(s, h, price) {
+  let maxLvl = 2;
+  if (has(h, 'geizig')) maxLvl = 1;
+  if (has(h, 'spendabel')) maxLvl = 3;
+  if (h.gold > price * 4) maxLvl += 1;
+  if (h.mood < 30) maxLvl -= 1;
+  return maxLvl + effectVal(s, 'priceTol');
+}
+
+function sellToHero(s, h, recipe, price, idx) {
+  h.gold -= price;
+  s.gold += price;
+  s.stats.sold += 1;
+  s.stats.earned += price;
+  s.shelf.splice(idx, 1);
+}
+
 function tryShopping(s, r, h) {
   let bought = false;
   for (const slot of ['weapon', 'armor']) {
@@ -210,25 +301,15 @@ function tryShopping(s, r, h) {
     for (const it of candidates) {
       const price = priceOf(s, it.recipe);
       const lvl = s.prices[it.recipe] ?? 1;
-      let maxLvl = 2;
-      if (has(h, 'geizig')) maxLvl = 1;
-      if (has(h, 'spendabel')) maxLvl = 3;
-      if (h.gold > price * 4) maxLvl += 1;
-      if (h.mood < 30) maxLvl -= 1;
-      if (lvl > maxLvl) { refusal ??= fmt(r.pick(THOUGHTS.tooExpensive), h, { x: it.rc.name, p: price }); continue; }
+      if (lvl > priceTolerance(s, h, price)) { refusal ??= fmt(r.pick(THOUGHTS.tooExpensive), h, { x: it.rc.name, p: price }); continue; }
       if (h.gold < price) { refusal ??= fmt(THOUGHTS.wantItem[0], h, { x: it.rc.name, p: price }); continue; }
 
-      // Kauf
-      h.gold -= price;
-      s.gold += price;
-      s.stats.sold += 1;
-      s.stats.earned += price;
+      sellToHero(s, h, it.recipe, price, it.idx);
       s.reputation += it.rc.tier;
       h[slot] = it.recipe;
-      s.shelf.splice(it.idx, 1);
-      let tpl = r.pick(T.buy);
-      if (lvl === 0) { tpl = T.buyCheap[0]; changeMood(h, 12); }
-      else if (lvl === 3) { tpl = T.buyExpensive[0]; changeMood(h, -6); }
+      let tpl = say(s, r, 'buy', T.buy);
+      if (lvl === 0) { tpl = say(s, r, 'buyCheap', T.buyCheap); changeMood(h, 12); }
+      else if (lvl === 3) { tpl = say(s, r, 'buyExpensive', T.buyExpensive); changeMood(h, -6); }
       else changeMood(h, 8);
       log(s, 'buy', fmt(tpl, h, { x: `**${it.rc.name}**` }) + ` (+${price} 🪙)`, h.id);
       setThought(h, `${it.rc.name}! Das muss ich gleich ausprobieren.`);
@@ -247,20 +328,16 @@ function buyPotion(s, r, h) {
   if (idx < 0) return;
   const price = priceOf(s, 'heiltrank');
   const lvl = s.prices.heiltrank ?? 1;
-  const maxLvl = has(h, 'geizig') ? 1 : has(h, 'spendabel') || has(h, 'vorsichtig') ? 3 : 2;
+  const maxLvl = (has(h, 'geizig') ? 1 : has(h, 'spendabel') || has(h, 'vorsichtig') ? 3 : 2) + effectVal(s, 'priceTol');
   if (lvl > maxLvl || h.gold < price * 1.5) return;
-  h.gold -= price;
-  s.gold += price;
-  s.stats.sold += 1;
-  s.stats.earned += price;
+  sellToHero(s, h, 'heiltrank', price, idx);
   h.potions += 1;
-  s.shelf.splice(idx, 1);
-  log(s, 'buy', fmt(r.pick(T.buyPotion), h) + ` (+${price} 🪙)`, h.id);
+  log(s, 'buy', fmt(say(s, r, 'buyPotion', T.buyPotion), h) + ` (+${price} 🪙)`, h.id);
 }
 
 function think(s, r, h) {
   h.nextThink = s.t + r.int(15, 40);
-  const day = clockOf(s).day;
+  const { day, minute } = clockOf(s);
   if (h.formDay !== day) { h.formDay = day; h.form = r.range(0.6, 1.3); }
 
   if (isNight(s)) {
@@ -269,6 +346,12 @@ function think(s, r, h) {
   }
 
   tryShopping(s, r, h);
+
+  if (effectVal(s, 'depart') === 0) {
+    const e = activeEffects(s).find((x) => x.mods.some((m) => m.key === 'depart'));
+    setThought(h, fmt(r.pick(THOUGHTS.staying), h, { x: e?.label ?? 'Fest' }));
+    return;
+  }
 
   const evals = evaluateAreas(s, h);
   const feasible = evals.filter((e) => !e.block).sort((a, b) => b.value - a.value);
@@ -283,6 +366,7 @@ function think(s, r, h) {
   if (h.gold < 30) goChance += 0.2;
   if (h.gold > 400 + h.level * 60) goChance -= 0.2;
   if (best && best.bountyValue > 0) goChance += 0.15 * (has(h, 'gierig') ? 2 : 1);
+  if (best && effectVal(s, 'gold', { area: best.id }) > 1.5) goChance += 0.2;
   goChance = Math.max(0.05, Math.min(0.95, goChance));
 
   const go = best && r.chance(goChance);
@@ -300,7 +384,8 @@ function think(s, r, h) {
       const key = `${topBounty.id}:${topBounty.block}:${day}`;
       if (h.refusalKey !== key) {
         h.refusalKey = key;
-        log(s, 'refuse', `${fmt('{n}', h)} wirft einen Blick aufs Auftragsbrett: „${reason}“`, h.id);
+        const intro = say(s, r, 'refuseIntro', T.refuseIntro);
+        log(s, 'refuse', `${fmt(intro, h)} „${reason}“`, h.id);
       }
       if (!go) { setThought(h, reason); return; }
     }
@@ -323,14 +408,17 @@ function think(s, r, h) {
   h.state = 'away';
   h.area = best.id;
   h.departedAt = s.t;
-  h.until = s.t + Math.round(a.time * r.range(0.85, 1.2));
+  h.until = s.t + Math.round(a.time * r.range(0.85, 1.2) * effectVal(s, 'duration'));
   h.bountyTrip = best.bountyValue > 0;
   h.chance = best.p;
   const v = areaVars(best.id);
   let tpl;
-  if (best.p < 0.5) tpl = r.pick(T.departBrave);
-  else if (h.bountyTrip) tpl = r.pick(T.departBounty);
-  else tpl = r.pick(T.depart);
+  if (best.p < 0.5) tpl = say(s, r, 'departBrave', T.departBrave);
+  else if (h.bountyTrip) tpl = say(s, r, 'departBounty', T.departBounty);
+  else if (effectVal(s, 'gold', { area: best.id }) > 1.5) tpl = say(s, r, 'departTreasure', T.departTreasure);
+  else if (minute < 8 * 60) tpl = say(s, r, 'departMorning', T.departMorning);
+  else if (minute >= 19 * 60) tpl = say(s, r, 'departEvening', T.departEvening);
+  else tpl = say(s, r, 'depart', T.depart);
   log(s, 'depart', fmt(tpl, h, v), h.id);
   setThought(h, fmt(r.pick(h.bountyTrip ? THOUGHTS.goingBounty : THOUGHTS.going), h, v));
 }
@@ -351,8 +439,9 @@ function deliverBounty(s, r, h, mat, count) {
   if (delivered > 0) {
     h.gold += paid;
     s.reputation += 2 * delivered;
+    s.stats.delivered[mat] = (s.stats.delivered[mat] ?? 0) + delivered;
     changeMood(h, 5);
-    log(s, 'deliver', fmt(r.pick(T.deliver), h, { x: `**${delivered}× ${MATERIALS[mat].name}** ${MATERIALS[mat].icon}` }) + ` (${paid} 🪙 Kopfgeld)`, h.id);
+    log(s, 'deliver', fmt(say(s, r, 'deliver', T.deliver), h, { x: `**${delivered}× ${MATERIALS[mat].name}** ${MATERIALS[mat].icon}` }) + ` (${paid} 🪙 Kopfgeld)`, h.id);
   }
 }
 
@@ -363,7 +452,7 @@ function returnHome(s, r, h) {
   s.stats.adventures++;
 
   // eine kleine Geschichte von unterwegs
-  if (r.chance(0.6)) log(s, 'story', fmt(r.pick(T.story[h.area]), h, v), h.id);
+  if (r.chance(0.6)) log(s, 'story', fmt(say(s, r, 'story.' + h.area, T.story[h.area]), h, v), h.id);
 
   const roll = r();
   const success = roll < h.chance;
@@ -371,34 +460,38 @@ function returnHome(s, r, h) {
   let xp = 0;
   let pieces = 0;
   if (success) {
-    gold = r.int(a.gold[0], a.gold[1]);
+    gold = Math.round(r.int(a.gold[0], a.gold[1]) * effectVal(s, 'gold', { area: h.area }));
     xp = a.danger * 3 + 5;
     pieces = a.mat ? r.int(1, 3) + (h.cls === 'waldlaeufer' && r.chance(0.5) ? 1 : 0) : 0;
     h.successes++;
     s.stats.successes++;
+    s.stats.areaWins[h.area] = (s.stats.areaWins[h.area] ?? 0) + 1;
     s.reputation += 1;
     changeMood(h, 8 + (h.fav === h.area ? 4 : 0));
-    const tpl = roll > h.chance - 0.1 ? r.pick(T.successClose) : r.pick(T.success);
+    const tpl = roll > h.chance - 0.1 ? say(s, r, 'successClose', T.successClose) : say(s, r, 'success', T.success);
     log(s, 'success', fmt(tpl, h, v) + ` (+${gold} 🪙)`, h.id);
+    // manchmal ein kleiner Nachsatz passend zum Wesen
+    const trait = h.traits.find((t) => T.traitFlavor[t]);
+    if (trait && r.chance(0.25)) log(s, 'story', fmt(say(s, r, 'trait.' + trait, T.traitFlavor[trait]), h, v), h.id);
     h.state = 'rest';
-    h.until = s.t + 25 + Math.round(a.time * 0.3);
+    h.until = s.t + Math.round((25 + a.time * 0.3) * effectVal(s, 'rest'));
   } else if (h.potions > 0) {
     h.potions--;
     gold = Math.round(r.int(a.gold[0], a.gold[1]) * 0.3);
     xp = a.danger;
     pieces = a.mat && r.chance(0.4) ? 1 : 0;
     changeMood(h, -4);
-    log(s, 'escape', fmt(r.pick(T.escape), h, v), h.id);
+    log(s, 'escape', fmt(say(s, r, 'escape', T.escape), h, v), h.id);
     h.state = 'rest';
-    h.until = s.t + 40 + Math.round(a.time * 0.3);
+    h.until = s.t + Math.round((40 + a.time * 0.3) * effectVal(s, 'rest'));
   } else {
     xp = Math.round(a.danger * 0.8);
     const lost = Math.round(h.gold * 0.15);
     h.gold -= lost;
     changeMood(h, -14);
-    log(s, 'fail', fmt(r.pick(T.fail), h, v) + (lost ? ` (${lost} 🪙 verloren)` : ''), h.id);
+    log(s, 'fail', fmt(say(s, r, 'fail', T.fail), h, v) + (lost ? ` (${lost} 🪙 verloren)` : ''), h.id);
     h.state = 'injured';
-    const base = r.int(180, 360) + a.danger * 2;
+    const base = (r.int(180, 360) + a.danger * 2) * effectVal(s, 'injury');
     h.until = s.t + Math.round(h.cls === 'krieger' ? base * 0.7 : base);
   }
   h.gold += gold;
@@ -406,7 +499,7 @@ function returnHome(s, r, h) {
   while (h.xp >= xpNeeded(h.level)) {
     h.xp -= xpNeeded(h.level);
     h.level++;
-    log(s, 'level', fmt(r.pick(T.levelUp), h, { x: h.level }), h.id);
+    log(s, 'level', fmt(say(s, r, 'levelUp', T.levelUp), h, { x: h.level }), h.id);
   }
   if (pieces > 0) {
     if (h.bountyTrip || s.bounties.some((b) => b.mat === a.mat)) deliverBounty(s, r, h, a.mat, pieces);
@@ -420,7 +513,7 @@ function returnHome(s, r, h) {
     h.gold -= repair;
     s.gold += repair;
     s.stats.earned += repair;
-    s.stats.repairs = (s.stats.repairs ?? 0) + repair;
+    s.stats.repairs += repair;
   }
   // Taverne kostet
   const tavern = Math.min(h.gold, 4 + h.level * 2);
@@ -453,12 +546,24 @@ export function cancelQueued(s, index) {
   s.queue.splice(index, 1);
 }
 
+// Reihenfolge ändern: Eintrag eine Position nach vorn
+export function prioritizeQueued(s, index) {
+  if (index <= 0 || index >= s.queue.length) return;
+  [s.queue[index - 1], s.queue[index]] = [s.queue[index], s.queue[index - 1]];
+}
+
+export function craftTime(s, recipeId) {
+  const rc = RECIPES[recipeId];
+  let time = rc.time / (building(s, 'schmiede').speed * effectVal(s, 'forge'));
+  if (rc.slot === 'potion') time *= effectVal(s, 'potionTime');
+  return Math.max(1, Math.round(time));
+}
+
 function fillSlots(s) {
-  const speed = building(s, 'schmiede').speed;
   for (let i = 0; i < s.slots.length; i++) {
     if (!s.slots[i] && s.queue.length) {
       const id = s.queue.shift();
-      s.slots[i] = { recipe: id, start: s.t, end: s.t + Math.round(RECIPES[id].time / speed) };
+      s.slots[i] = { recipe: id, start: s.t, end: s.t + craftTime(s, id) };
     }
   }
 }
@@ -468,6 +573,11 @@ function processCrafting(s) {
   for (let i = 0; i < s.slots.length; i++) {
     const job = s.slots[i];
     if (!job || job.end > s.t) continue;
+    if (routeToOrder(s, job.recipe)) {
+      s.stats.crafted++;
+      s.slots[i] = null;
+      continue;
+    }
     if (s.shelf.length >= cap) {
       if (!job.blocked) { job.blocked = true; log(s, 'craft', fmt(T.shelfFull[0], null, { x: `**${RECIPES[job.recipe].name}**` })); }
       continue;
@@ -481,8 +591,9 @@ function processCrafting(s) {
 
 export function buyMaterial(s, mat, n) {
   const m = MATERIALS[mat];
-  if (!m.basic || s.gold < m.price * n) return false;
-  s.gold -= m.price * n;
+  const cost = matPrice(s, mat) * n;
+  if (!m.basic || s.gold < cost) return false;
+  s.gold -= cost;
   s.mats[mat] += n;
   return true;
 }
@@ -501,6 +612,7 @@ export function postBounty(s, mat, reward, qty) {
   if (s.gold < cost || reward < 1 || qty < 1) return false;
   s.gold -= cost;
   s.bounties.push({ id: s.nextId++, mat, reward, qty, delivered: 0, posted: s.t });
+  s.stats.bountiesPosted++;
   log(s, 'bounty', `Du hängst ein Kopfgeld aus: **${qty}× ${MATERIALS[mat].name}** ${MATERIALS[mat].icon} für je ${reward} 🪙.`);
   return true;
 }
@@ -510,6 +622,226 @@ export function cancelBounty(s, id) {
   if (!b) return;
   s.gold += b.reward * (b.qty - b.delivered);
   s.bounties = s.bounties.filter((x) => x.id !== id);
+}
+
+// ---------- Bestellungen ----------
+
+const CLIENTS = [
+  { name: 'Hauptmann Brandt von der Stadtwache', icon: '💂', prefer: 'krieger',
+    intro: 'Meine Männer brauchen anständige Ausrüstung. Und zwar pünktlich.' },
+  { name: 'Fürstin Ysmene von Rabenstein', icon: '👑', prefer: null,
+    intro: 'Mein Gefolge reist in Kürze. Ich zahle gut – für Verspätung habe ich kein Verständnis.' },
+  { name: 'Bruder Anselm vom Kloster', icon: '⛪', prefer: 'potion',
+    intro: 'Die Kranken im Hospiz warten auf Heiltränke. Gott vergelt\'s – und das Kloster auch.' },
+  { name: 'Jagdmeisterin Wilma', icon: '🦌', prefer: 'waldlaeufer',
+    intro: 'Die große Jagd steht bevor. Meine Treiber brauchen Ausrüstung.' },
+  { name: 'Magister Quirin von der Akademie', icon: '📚', prefer: 'magier',
+    intro: 'Für die neuen Studenten – sie fackeln sonst wieder die Bibliothek ab.' },
+  { name: 'Die Kaufmannsgilde', icon: '💰', prefer: null,
+    intro: 'Eine Lieferung für unsere Karawanenwachen. Die Gilde zahlt mit Aufschlag.' },
+];
+
+function generateOrder(s, r) {
+  const client = r.pick(CLIENTS);
+  const maxTier = building(s, 'schmiede').tier;
+  let pool = Object.keys(RECIPES).filter((id) => RECIPES[id].tier <= maxTier);
+  if (client.prefer === 'potion') pool = ['heiltrank'];
+  else if (client.prefer) pool = pool.filter((id) => RECIPES[id].cls === client.prefer || id === 'heiltrank');
+  // eher die aktuell höchste und die einfachste Stufe
+  const lines = [];
+  const n = pool.length > 2 && r.chance(0.45) ? 2 : 1;
+  for (let i = 0; i < n; i++) {
+    const options = pool.filter((id) => !lines.some((l) => l.recipe === id));
+    const weighted = options.flatMap((id) => (RECIPES[id].tier === maxTier ? [id, id] : [id]));
+    const recipe = r.pick(weighted);
+    const rc = RECIPES[recipe];
+    const qty = rc.slot === 'potion' ? r.int(3, 6) : rc.tier === 1 ? r.int(2, 4) : r.int(1, 3);
+    lines.push({ recipe, qty, filled: 0 });
+  }
+  const value = lines.reduce((sum, l) => sum + fairPrice(l.recipe) * l.qty, 0);
+  const work = lines.reduce((sum, l) => sum + RECIPES[l.recipe].time * l.qty, 0) / s.slots.length;
+  const tier = Math.max(...lines.map((l) => RECIPES[l.recipe].tier));
+  return {
+    id: s.nextId++, client: client.name, icon: client.icon, intro: client.intro,
+    lines,
+    reward: Math.round((value * r.range(1.15, 1.35)) / 5) * 5,
+    rep: 2 + tier,
+    duration: Math.round(Math.max(10 * 60, work * 2 + 8 * 60) / 60) * 60,
+    state: 'offered', offerUntil: s.t + OFFER_WAIT, deadline: null,
+  };
+}
+
+export function acceptOrder(s, id) {
+  const o = s.orders.find((x) => x.id === id && x.state === 'offered');
+  if (!o) return false;
+  o.state = 'active';
+  o.deadline = s.t + o.duration;
+  log(s, 'order', `${o.icon} Du nimmst die Bestellung von **${o.client}** an.`);
+  fillOrderFromShelf(s, id);
+  return true;
+}
+
+export function declineOrder(s, id) {
+  const o = s.orders.find((x) => x.id === id && x.state === 'offered');
+  if (!o) return;
+  s.orders = s.orders.filter((x) => x !== o);
+  log(s, 'order', `${o.icon} Du lehnst die Bestellung von **${o.client}** ab.`);
+}
+
+function orderNeeds(o, recipe) {
+  return o.state === 'active' && o.lines.some((l) => l.recipe === recipe && l.filled < l.qty);
+}
+
+function routeToOrder(s, recipe) {
+  const o = s.orders.filter((x) => orderNeeds(x, recipe)).sort((a, b) => a.deadline - b.deadline)[0];
+  if (!o) return false;
+  o.lines.find((l) => l.recipe === recipe && l.filled < l.qty).filled++;
+  checkOrderComplete(s, o);
+  return true;
+}
+
+export function fillOrderFromShelf(s, id) {
+  const o = s.orders.find((x) => x.id === id);
+  if (!o) return 0;
+  let moved = 0;
+  for (let i = s.shelf.length - 1; i >= 0; i--) {
+    if (orderNeeds(o, s.shelf[i].recipe)) {
+      o.lines.find((l) => l.recipe === s.shelf[i].recipe && l.filled < l.qty).filled++;
+      s.shelf.splice(i, 1);
+      moved++;
+    }
+  }
+  checkOrderComplete(s, o);
+  return moved;
+}
+
+function checkOrderComplete(s, o) {
+  if (o.state !== 'active' || o.lines.some((l) => l.filled < l.qty)) return;
+  s.gold += o.reward;
+  s.stats.earned += o.reward;
+  s.stats.ordersDone++;
+  s.reputation += o.rep;
+  s.orders = s.orders.filter((x) => x !== o);
+  log(s, 'order', `${o.icon} Die Bestellung für **${o.client}** ist vollständig und wird abgeholt. (+${o.reward} 🪙, Ruf +${o.rep})`);
+}
+
+function processOrders(s, r) {
+  for (const o of [...s.orders]) {
+    if (o.state === 'offered' && s.t >= o.offerUntil) {
+      s.orders = s.orders.filter((x) => x !== o);
+      log(s, 'order', `${o.icon} **${o.client}** hat nicht länger auf deine Antwort gewartet.`);
+    } else if (o.state === 'active' && s.t >= o.deadline) {
+      s.orders = s.orders.filter((x) => x !== o);
+      const cap = building(s, 'laden').shelf;
+      for (const l of o.lines) for (let i = 0; i < l.filled; i++) if (s.shelf.length < cap) s.shelf.push({ recipe: l.recipe });
+      s.reputation = Math.max(0, s.reputation - o.rep);
+      log(s, 'order', `${o.icon} Die Frist ist abgelaufen! **${o.client}** ist verärgert. (Ruf −${o.rep}, Fertiges kommt ins Regal)`);
+    }
+  }
+  if (s.t >= s.nextOrder && !isNight(s)) {
+    s.nextOrder = s.t + r.int(5 * 60, 10 * 60);
+    if (s.orders.length < 2) {
+      const o = generateOrder(s, r);
+      s.orders.push(o);
+      log(s, 'order', `${o.icon} **${o.client}** fragt eine Bestellung an: ${o.lines.map((l) => `${l.qty}× ${RECIPES[l.recipe].name}`).join(', ')} für ${o.reward} 🪙.`);
+    }
+  }
+}
+
+// ---------- Ereignisse ----------
+
+function eventApi(s, r) {
+  return {
+    addEffect: (e) => addEffect(s, e),
+    removeEffect: (tag) => { s.effects = s.effects.filter((e) => e.tag !== tag); },
+    moodAll: (d) => { for (const h of s.heroes) changeMood(h, d); },
+    addHero: (level) => (s.heroes.length < building(s, 'taverne').heroes ? addHero(s, r, { level, silent: true }) : null),
+  };
+}
+
+export function eventCost(s, ev, opt) {
+  return opt.cost ? opt.cost(s, ev.data) : {};
+}
+
+export function canPay(s, cost) {
+  if (cost.gold && s.gold < cost.gold) return false;
+  if (cost.potion && s.shelf.filter((x) => x.recipe === 'heiltrank').length < cost.potion) return false;
+  for (const [m, n] of Object.entries(cost.mats ?? {})) if (s.mats[m] < n) return false;
+  return true;
+}
+
+function pay(s, cost) {
+  if (cost.gold) s.gold -= cost.gold;
+  for (const [m, n] of Object.entries(cost.mats ?? {})) s.mats[m] -= n;
+  for (let i = 0; i < (cost.potion ?? 0); i++) s.shelf.splice(s.shelf.findIndex((x) => x.recipe === 'heiltrank'), 1);
+}
+
+export function resolveEvent(s, index, auto = false) {
+  const ev = s.event;
+  if (!ev) return false;
+  const def = EVENT_BY_ID[ev.id];
+  const opt = def.options[index];
+  const cost = eventCost(s, ev, opt);
+  if (!canPay(s, cost)) return false;
+  const r = makeRng(s);
+  pay(s, cost);
+  const result = opt.apply(s, r, eventApi(s, r), ev.data);
+  s.event = null;
+  s.nextEvent = s.t + r.int(3 * 60, 6 * 60);
+  log(s, 'event', `${def.icon} ${auto ? 'Du hast nicht rechtzeitig entschieden. ' : ''}${result}`);
+  return true;
+}
+
+function processEvents(s, r) {
+  if (s.event) {
+    if (s.t >= s.event.expires) {
+      // Vorgabe: letzte Option, die bezahlbar ist
+      const def = EVENT_BY_ID[s.event.id];
+      for (let i = def.options.length - 1; i >= 0; i--) if (resolveEvent(s, i, true)) break;
+    }
+    return;
+  }
+  const { minute } = clockOf(s);
+  if (s.t < s.nextEvent || minute < 7 * 60 || minute >= 20 * 60) return;
+  const pool = EVENTS.filter((e) => !s.recentEvents.includes(e.id) && (!e.cond || e.cond(s)));
+  const total = pool.reduce((sum, e) => sum + e.weight, 0);
+  let roll = r() * total;
+  const def = pool.find((e) => (roll -= e.weight) < 0) ?? pool[0];
+  const data = def.setup ? def.setup(s, r, eventApi(s, r)) : {};
+  s.event = { id: def.id, data, t: s.t, expires: s.t + EVENT_WAIT };
+  s.recentEvents.push(def.id);
+  if (s.recentEvents.length > 4) s.recentEvents.shift();
+  log(s, 'event', `${def.icon} **${def.title}:** ${def.text(data)}`);
+}
+
+// ---------- Ziele & Projekte ----------
+
+export function currentGoal(s) {
+  const g = GOALS[s.goalIndex];
+  if (!g) return null;
+  const [cur, max] = g.check(s);
+  return { ...g, cur: Math.min(cur, max), max };
+}
+
+function checkGoals(s) {
+  const g = currentGoal(s);
+  if (!g || g.cur < g.max) return;
+  const parts = [];
+  for (const [k, n] of Object.entries(g.reward)) {
+    if (k === 'gold') { s.gold += n; parts.push(`${n} 🪙`); } else { s.mats[k] += n; parts.push(`${n}× ${MATERIALS[k].icon}`); }
+  }
+  s.goalIndex++;
+  log(s, 'goal', `🎯 Ziel erreicht: **${g.text}**! Belohnung: ${parts.join(', ')}.`);
+}
+
+export function buildProject(s, id) {
+  const p = PROJECTS[id];
+  if (!p || s.projects[id] || s.gold < p.cost) return false;
+  s.gold -= p.cost;
+  s.projects[id] = s.t;
+  s.reputation += Math.round(p.cost / 50);
+  log(s, 'build', `${p.icon} **${p.name}** ist fertig! ${p.desc}`);
+  return true;
 }
 
 // ---------- Gebäude ----------
@@ -552,11 +884,14 @@ function stepMinute(s, r) {
     if (s.t % 60 === 0) {
       if (h.mood < 50) changeMood(h, 1);
       else if (h.mood > 65) changeMood(h, -1);
-      if (h.state !== 'away' && has(h, 'gesellig')) changeMood(h, 1);
+      if (h.state !== 'away') {
+        if (has(h, 'gesellig')) changeMood(h, 1);
+        changeMood(h, effectVal(s, 'moodHour'));
+      }
       if (h.mood < 15) {
         h.lowMoodSince ??= s.t;
         if (s.t - h.lowMoodSince > 24 * 60) {
-          log(s, 'leave', fmt(r.pick(T.leave), h), h.id);
+          log(s, 'leave', fmt(say(s, r, 'leave', T.leave), h), h.id);
           s.heroes = s.heroes.filter((x) => x !== h);
         }
       } else h.lowMoodSince = null;
@@ -566,7 +901,7 @@ function stepMinute(s, r) {
   if (s.t >= s.nextArrival) {
     s.nextArrival = s.t + 60;
     const cap = building(s, 'taverne').heroes;
-    const chance = Math.min(0.5, 0.06 + s.reputation * 0.004);
+    const chance = Math.min(0.6, (0.06 + s.reputation * 0.004) * effectVal(s, 'arrival'));
     if (s.heroes.length < cap && !isNight(s) && r.chance(chance)) {
       const lvl = Math.max(1, Math.min(8, 1 + Math.floor(Math.sqrt(s.reputation) / 3) + r.int(-1, 1)));
       addHero(s, r, { level: lvl });
@@ -579,13 +914,23 @@ function stepMinute(s, r) {
     if (here.length >= 2 && !isNight(s)) {
       const a = r.pick(here);
       const b = r.pick(here.filter((x) => x !== a));
-      log(s, 'banter', fmt(r.pick(T.banter), a, { o: `**${b.name}**` }), a.id);
+      log(s, 'banter', fmt(say(s, r, 'banter', T.banter), a, { o: `**${b.name}**` }), a.id);
       changeMood(a, 3); changeMood(b, 3);
     }
   }
+
+  processOrders(s, r);
+  processEvents(s, r);
+  checkGoals(s);
+  if (s.t % 60 === 0) s.effects = s.effects.filter((e) => e.until > s.t);
 }
 
 export function advance(s, minutes) {
   const r = makeRng(s);
   for (let i = 0; i < minutes; i++) stepMinute(s, r);
+}
+
+// Nach Spieleraktionen: Ziele sofort prüfen
+export function afterAction(s) {
+  checkGoals(s);
 }

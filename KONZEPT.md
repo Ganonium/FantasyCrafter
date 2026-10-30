@@ -62,6 +62,49 @@ Drachen traut, gibt es keine Drachenschuppen. Genauso fehlt die Spinnenseide, we
 - **Preisstufen** pro Ware: Günstig / Fair / Teuer / Wucher.
 - **Ladenhüter** kann man für 50 % an den Händler verkaufen.
 
+## Ereignisse
+
+Etwa alle 3–6 Spielstunden (tagsüber) passiert im Dorf etwas, und du musst dich entscheiden. Die Wahl verändert das
+Dorf meist für mehrere Stunden. Ein Ereignis wartet 6 Stunden auf dich, danach gilt die letzte Option als Vorgabe.
+Aktive Einflüsse stehen als Chips unter der Dorfszene.
+
+| Ereignis | Entscheidung |
+|---|---|
+| 🐪 Händlerkarawane | seltene Materialien teuer kaufen, Grundstoffe im Großeinkauf oder nichts |
+| 🐺 Wolfsplage | Prämie ausloben (Finsterwald bringt 8 Std. 2,5× Gold) oder vertrösten (Finsterwald gefährlicher) |
+| 🏆 Turnier | Preisgeld stiften (danach spendable Helden) oder nur zuschauen; so oder so zieht ein paar Stunden niemand los |
+| 🌧️ Dauerregen | Abenteuer dauern länger; aus Stoff Regenmäntel nähen und verkaufen |
+| ⛓️ Eisenmangel | Eisen kostet 16 Std. das Dreifache; letzten Wagen zum alten Preis kaufen? |
+| ⚒️ Meisterschmied | anheuern: 8 Std. lang 60 % schneller schmieden |
+| 🌾 Erntefest | großes Fest (Laune hoch, aber niemand zieht los), Fass spendieren oder nichts |
+| 🗺️ Schatzgerücht | Karte kaufen oder Gerücht verbreiten: ein Gebiet bringt 10 Std. viel mehr Gold |
+| 🤕 Verletzter Fremder | Heiltrank geben, zum Heiler bringen (vielleicht bleibt er als Held) oder weitergehen |
+| 👺 Goblin-Überfall | Helden als Wachen bezahlen, Stadtwache anfordern oder riskieren (Diebstahl) |
+| 🧙‍♀️ Kräuterfrau | billige Kräuter oder ihr Rezept (Heiltränke doppelt so schnell) |
+| 🎶 Barde | bezahlen, damit er bleibt: bessere Laune, mehr Neuankömmlinge |
+| 🛒 Konkurrenz am Markt | Helden 12 Std. wählerischer bei Preisen; Händler wegschicken? |
+
+## Bestellungen
+
+Auftraggeber (Stadtwache, Fürstin, Kloster, Jagdmeisterin, Akademie, Kaufmannsgilde) fragen Bestellungen mit Frist an.
+Du kannst sie annehmen oder ablehnen. Angenommene Bestellungen bekommen fertige Ware direkt aus der Werkstatt, sie landet
+also nicht im Regal. Damit wird die **Reihenfolge in der Warteschlange** zur Entscheidung: zuerst die Bestellung oder
+zuerst das Schwert, auf das ein Held wartet? Pünktliche Lieferung bringt Gold und Ruf, Verspätung kostet Ruf.
+Einträge in der Warteschlange lassen sich nach vorne schieben.
+
+## Ziele und Dorfprojekte
+
+- **Ziele**: eine Kette von 15 Zielen (vom ersten Verkauf bis zum Helden in voller Drachenausrüstung) mit Belohnungen.
+  Das aktuelle Ziel steht oben in der Chronik und im Dorf-Tab.
+- **Dorfprojekte**: einmalige Gold-Investitionen mit dauerhaftem Bonus: Dorfbrunnen, Heilerhütte, Marktplatz,
+  Wachturm, Bardenbühne, Heldendenkmal (250 bis 3.000 Gold).
+
+## Chronik
+
+Jede Situation hat mehrere Textvarianten. Die Simulation meidet die zuletzt benutzten, damit sich nichts direkt
+wiederholt. Dazu kommen Varianten nach Tageszeit, Schatzjagd-Texte und Nachsätze passend zum Wesen der Helden
+(der Gierige zählt die Münzen zweimal).
+
 ## Gebiete
 
 | Gebiet | Gefahr | Beute |
@@ -91,10 +134,10 @@ Drachen traut, gibt es keine Drachenschuppen. Genauso fehlt die Spinnenseide, we
 
 ## Ideen für später
 
-- **Ziele**: Drachensieg, Prestige (neues Dorf gründen, Bonus bleibt)
+- **Großes Ziel**: Drachensieg, Prestige (neues Dorf gründen, Bonus bleibt)
 - **Weitere Quest-Arten**: Monsterjagd, Eskorte, Rettungsmission für einen verschollenen Helden
 - **Beziehungen**: Freundschaften und Rivalitäten, Heldengruppen ziehen gemeinsam los
-- **Ereignisse**: Goblin-Überfall, Händlerkarawane, Turnier, Drachenangriff aufs Dorf
+- **Mehr Ereignisse**: Drachenangriff aufs Dorf, Ketten-Ereignisse über mehrere Tage
 - **Legendäre Gegenstände** mit Namen, Verzauberungen
 - **Erinnerungen**: Helden merken sich, wer ihnen gute Ausrüstung verkauft hat und wo sie verletzt wurden
 - Mehr Werkstätten (Alchemist, Gerberei, Runenschnitzer) und Zwischenprodukte

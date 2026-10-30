@@ -191,3 +191,38 @@ textarea { width: 100%; margin-top: 8px; background: #15110d; color: var(--text)
   font-size: 14px; animation: fade 2.2s forwards;
 }
 @keyframes fade { 0%, 80% { opacity: 1; } 100% { opacity: 0; } }
+
+/* Ereignisse, Effekte, Bestellungen, Ziele */
+#banner:empty { display: none; }
+#banner { padding: 6px 12px 0; }
+.event-btn {
+  display: flex; align-items: center; gap: 8px; width: 100%; margin: 4px 0;
+  background: linear-gradient(90deg, #6a3a1a, #4a2a14); border: 1px solid var(--gold);
+  border-radius: 8px; padding: 8px 10px; font-size: 14px; text-align: left;
+  animation: pulse 2.4s ease-in-out infinite;
+}
+.event-btn b { flex: 1; color: var(--gold); }
+.event-btn span { color: var(--text); font-size: 13px; }
+.event-btn.order { background: linear-gradient(90deg, #2e3a4a, #222a36); border-color: #8aa8d0; animation: none; }
+.event-btn.order b { color: #cfe0f6; }
+@keyframes pulse { 0%, 100% { box-shadow: 0 0 0 rgba(232, 184, 74, 0); } 50% { box-shadow: 0 0 10px rgba(232, 184, 74, 0.45); } }
+.effects { display: flex; flex-wrap: wrap; gap: 4px; margin: 4px 0 2px; }
+.effect { font-size: 12px; background: #332a20; border: 1px solid var(--line); border-radius: 12px; padding: 2px 8px; color: #e6d6b6; }
+
+.options { display: flex; flex-direction: column; gap: 8px; margin: 12px 0; }
+.option { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left; white-space: normal; padding: 10px 12px; }
+.option b { font-size: 14px; }
+.option .cost { color: var(--gold); font-size: 13px; }
+.option small { color: var(--dim); font-size: 12px; }
+
+.card.goal { border-color: #7a6030; background: linear-gradient(180deg, #3a2f1e, var(--card)); margin-top: 10px; }
+.card.order.offered { border-color: #8aa8d0; }
+.card.project.done { opacity: 0.7; }
+.quote { font-style: italic; color: #d6c8ae; margin: 2px 0 6px; }
+.gold-txt { color: var(--gold); font-weight: bold; }
+.queue { display: flex; flex-direction: column; gap: 4px; }
+.qitem { display: flex; justify-content: space-between; align-items: center; background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: 3px 4px 3px 10px; font-size: 13px; }
+.qitem .chip { padding: 2px 8px; margin-left: 4px; }
+.entry.k-event .txt { color: #f2c98a; }
+.entry.k-goal .txt { color: var(--gold); font-weight: bold; }
+.entry.k-order .txt { color: #cfe0f6; }

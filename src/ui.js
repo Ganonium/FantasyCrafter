@@ -6,12 +6,17 @@ import {
 import {
   clockOf, building, heroPower, successChance, evaluateAreas, priceOf, xpNeeded, canCraft, queueCraft,
   cancelQueued, buyMaterial, sellFromShelf, postBounty, cancelBounty, upgradeCost, canUpgrade, upgrade,
+  activeEffects, resolveEvent, eventCost, canPay, acceptOrder, declineOrder, fillOrderFromShelf, currentGoal,
+  buildProject, prioritizeQueued, craftTime, matPrice, areaDanger, afterAction,
 } from './sim.js';
+import { EVENT_BY_ID } from './events.js';
+import { GOALS, PROJECTS } from './goals.js';
 import { renderPortrait } from './sprites.js';
 
 const KIND_ICON = {
   depart: '🚶', success: '✅', fail: '🤕', escape: '🧪', story: '📖', buy: '🛒', deliver: '📦', refuse: '💬',
   arrive: '👋', leave: '🚪', level: '⭐', banter: '🍺', craft: '🔨', bounty: '📋', build: '🏗️', info: '📜',
+  event: '📯', order: '🧾', goal: '🎯',
 };
 
 const TABS = [
@@ -98,6 +103,8 @@ export class UI {
     this.$('#speed').classList.toggle('fast', this.game.speed > 1);
     // Während des Antippens nicht neu rendern, sonst geht der Klick ins Leere
     if (this.pointerDown) return;
+    const banner = this.bannerHtml(s);
+    if (banner !== this.lastBanner) { this.lastBanner = banner; this.$('#banner').innerHTML = banner; }
     const html = this['tab_' + this.tab](s);
     if (html !== this.lastHtml) {
       this.lastHtml = html;
@@ -120,7 +127,31 @@ export class UI {
         <span class="time">${fmtClock(c.minute)}</span><span class="ico">${KIND_ICON[e.kind] ?? '•'}</span>
         <span class="txt">${rich(e.text)}</span></div>`;
     }
-    return `<section>${html || '<p class="dim">Noch ist nichts passiert.</p>'}</section>`;
+    return `${this.goalCard(s)}<section>${html || '<p class="dim">Noch ist nichts passiert.</p>'}</section>`;
+  }
+
+  bannerHtml(s) {
+    let html = '';
+    if (s.event) {
+      const def = EVENT_BY_ID[s.event.id];
+      html += `<button class="event-btn" data-act="event">${def.icon} <b>${def.title}</b><span>Entscheiden ›</span></button>`;
+    }
+    const offered = s.orders.filter((o) => o.state === 'offered').length;
+    if (offered) html += `<button class="event-btn order" data-act="tab" data-id="auftraege">🧾 <b>${offered === 1 ? 'Neue Bestellanfrage' : `${offered} Bestellanfragen`}</b><span>Ansehen ›</span></button>`;
+    const eff = activeEffects(s);
+    if (eff.length) {
+      html += `<div class="effects">${eff.map((e) => `<span class="effect" title="${esc(e.label)}">${e.icon} ${esc(e.label)} · ${fmtDuration(e.until - s.t)}</span>`).join('')}</div>`;
+    }
+    return html;
+  }
+
+  goalCard(s) {
+    const g = currentGoal(s);
+    if (!g) return `<div class="card goal"><div class="row"><b>🎯 Alle Ziele erreicht!</b></div><div class="small dim">Neue Ziele folgen in einer späteren Version.</div></div>`;
+    const reward = Object.entries(g.reward).map(([k, n]) => (k === 'gold' ? `${n} 🪙` : `${n}× ${MATERIALS[k].icon}`)).join(', ');
+    return `<div class="card goal"><div class="row"><b>🎯 ${g.text}</b><span class="small">${g.cur.toLocaleString('de-DE')}/${g.max.toLocaleString('de-DE')}</span></div>
+      <div class="bar"><div style="width:${(g.cur / g.max) * 100}%"></div></div>
+      <div class="small dim">Ziel ${s.goalIndex + 1} von ${GOALS.length} · Belohnung: ${reward}</div></div>`;
   }
 
   tab_werkstatt(s) {
@@ -129,12 +160,14 @@ export class UI {
       if (!j) return `<div class="slot empty">Werkplatz ${i + 1}: frei</div>`;
       const total = j.end - j.start;
       const pct = Math.min(100, ((s.t - j.start) / total) * 100);
-      return `<div class="slot"><div class="row"><b>${RECIPES[j.recipe].name}</b>
+      return `<div class="slot"><div class="row"><b>${RECIPES[j.recipe].name}${this.orderMark(s, j.recipe)}</b>
         <span class="dim">${j.blocked ? '⚠️ Regal voll!' : 'noch ' + fmtDuration(j.end - s.t)}</span></div>
         <div class="bar"><div style="width:${pct}%"></div></div></div>`;
     }).join('');
     const queue = s.queue.length
-      ? `<div class="chips">${s.queue.map((q, i) => `<button class="chip" data-act="unqueue" data-i="${i}">${RECIPES[q].name} ✕</button>`).join('')}</div>`
+      ? `<div class="queue">${s.queue.map((q, i) => `<div class="qitem"><span>${i + 1}. ${RECIPES[q].name}${this.orderMark(s, q)}</span>
+          <span>${i > 0 ? `<button class="chip" data-act="prio" data-i="${i}" title="nach vorn">⬆</button>` : ''}
+          <button class="chip" data-act="unqueue" data-i="${i}" title="entfernen">✕</button></span></div>`).join('')}</div>`
       : '<p class="dim small">Warteschlange leer.</p>';
 
     const filters = [['krieger', '⚔️'], ['waldlaeufer', '🏹'], ['magier', '🔮'], ['trank', '🧪']];
@@ -147,7 +180,7 @@ export class UI {
       const ok = canCraft(s, id) && s.queue.length < 10;
       return `<div class="recipe ${locked ? 'locked' : ''}">
         <div class="rtop"><b>${r.name}</b> <span class="tier">${'★'.repeat(r.tier)}</span>
-          <span class="dim small">${r.slot === 'weapon' ? 'Waffe' : r.slot === 'armor' ? 'Rüstung' : 'Trank'} · ${fmtDuration(r.time / smith.speed)} · ~${fairPrice(id)} 🪙</span></div>
+          <span class="dim small">${r.slot === 'weapon' ? 'Waffe' : r.slot === 'armor' ? 'Rüstung' : 'Trank'} · ${fmtDuration(craftTime(s, id))} · ~${fairPrice(id)} 🪙</span></div>
         <div class="rbot"><span>${matList(s, r.mats)}</span>
           ${locked ? `<span class="dim small">🔒 Schmiede St. ${r.tier}</span>`
             : `<button data-act="craft" data-id="${id}" ${ok ? '' : 'disabled'}>Herstellen</button>`}</div></div>`;
@@ -155,9 +188,9 @@ export class UI {
 
     const mats = Object.entries(MATERIALS).map(([id, m]) => `<div class="matrow">
       <span>${m.icon} ${m.name}</span><b>${s.mats[id]}</b>
-      ${m.basic ? `<span class="buy"><button data-act="buymat" data-id="${id}" data-n="1" ${s.gold < m.price ? 'disabled' : ''}>+1</button>
-        <button data-act="buymat" data-id="${id}" data-n="5" ${s.gold < m.price * 5 ? 'disabled' : ''}>+5</button>
-        <span class="dim small">${m.price} 🪙</span></span>`
+      ${m.basic ? `<span class="buy"><button data-act="buymat" data-id="${id}" data-n="1" ${s.gold < matPrice(s, id) ? 'disabled' : ''}>+1</button>
+        <button data-act="buymat" data-id="${id}" data-n="5" ${s.gold < matPrice(s, id) * 5 ? 'disabled' : ''}>+5</button>
+        <span class="small ${matPrice(s, id) > m.price ? 'bad' : matPrice(s, id) < m.price ? 'ok' : 'dim'}">${matPrice(s, id)} 🪙</span></span>`
         : `<span class="dim small">nur über Kopfgeld</span>`}</div>`).join('');
 
     return `<section><h2>Werkplätze</h2>${slots}<h3>Warteschlange</h3>${queue}</section>
@@ -212,17 +245,17 @@ export class UI {
     const matBtns = RARE.map((m) => `<button data-act="bmat" data-id="${m}" class="${f.mat === m ? 'active' : ''}">${MATERIALS[m].icon}<small>${MATERIALS[m].name}</small></button>`).join('');
     const opinions = s.heroes.map((h) => {
       const ev = evaluateAreas(s, h).find((e) => e.id === area);
-      const p = Math.round(successChance(h, area) * 100);
+      const p = Math.round(successChance(h, area, s) * 100);
       let verdict;
       if (ev.block === 'hated') verdict = '<span class="bad">hasst das Gebiet</span>';
       else if (ev.block === 'danger') verdict = `<span class="bad">zu gefährlich</span>`;
       else verdict = '<span class="ok">würde gehen</span>';
       return `<div class="row small"><span>${esc(h.name)}</span><span>${p}% · ${verdict}</span></div>`;
     }).join('');
-    return `<section><h2>Auftragsbrett</h2>${active || '<p class="dim">Keine Kopfgelder ausgehängt.</p>'}</section>
+    return `${this.ordersHtml(s)}<section><h2>Kopfgelder</h2>${active || '<p class="dim">Keine Kopfgelder ausgehängt.</p>'}</section>
       <section><h2>Neues Kopfgeld</h2>
         <div class="seg mats">${matBtns}</div>
-        <p class="small">${a.icon} <b>${a.name}</b> · Gefahr ${a.danger} · Dauer ca. ${fmtDuration(a.time)} · Marktwert ~${MATERIALS[f.mat].value} 🪙</p>
+        <p class="small">${a.icon} <b>${a.name}</b> · Gefahr ${Math.round(areaDanger(s, area))} · Dauer ca. ${fmtDuration(a.time)} · Marktwert ~${MATERIALS[f.mat].value} 🪙</p>
         <div class="row"><span>Belohnung pro Stück</span><span class="step">
           <button data-act="bstep" data-k="reward" data-d="-5">−5</button><button data-act="bstep" data-k="reward" data-d="-1">−</button>
           <b>${f.reward} 🪙</b>
@@ -234,6 +267,35 @@ export class UI {
       </section>
       <section><h2>Was die Helden davon halten</h2>${opinions}
         <p class="small dim">Ob sie wirklich gehen, entscheiden sie selbst – nach Laune, Tagesform, Gier und Mut.</p></section>`;
+  }
+
+  orderMark(s, recipe) {
+    return s.orders.some((o) => o.state === 'active' && o.lines.some((l) => l.recipe === recipe && l.filled < l.qty)) ? ' <span title="für eine Bestellung">🧾</span>' : '';
+  }
+
+  ordersHtml(s) {
+    const cards = s.orders.map((o) => {
+      const lines = o.lines.map((l) => {
+        const onShelf = s.shelf.filter((x) => x.recipe === l.recipe).length;
+        return `<div class="row small"><span>${l.filled >= l.qty ? '✅' : '▫️'} ${l.qty}× ${RECIPES[l.recipe].name} <span class="tier">${'★'.repeat(RECIPES[l.recipe].tier)}</span></span>
+          <span>${o.state === 'active' ? `${l.filled}/${l.qty}` : ''}${onShelf && l.filled < l.qty ? ` <span class="dim">(${onShelf} im Regal)</span>` : ''}</span></div>`;
+      }).join('');
+      const head = `<div class="row"><b>${o.icon} ${esc(o.client)}</b><span class="gold-txt">${o.reward} 🪙</span></div>`;
+      if (o.state === 'offered') {
+        return `<div class="card order offered">${head}<div class="small quote">„${esc(o.intro)}“</div>${lines}
+          <div class="small dim">Frist nach Annahme: ${fmtDuration(o.duration)} · Ruf +${o.rep} (bei Verspätung −${o.rep}) · Angebot gilt noch ${fmtDuration(o.offerUntil - s.t)}</div>
+          <div class="row"><button class="link" data-act="decline" data-id="${o.id}">Ablehnen</button><button data-act="accept" data-id="${o.id}">Annehmen</button></div></div>`;
+      }
+      const left = o.deadline - s.t;
+      const canFill = o.lines.some((l) => l.filled < l.qty && s.shelf.some((x) => x.recipe === l.recipe));
+      return `<div class="card order">${head}${lines}
+        <div class="row small"><span class="${left < 180 ? 'bad' : 'dim'}">⏳ noch ${fmtDuration(left)} (bis Tag ${clockOf(s, o.deadline).day}, ${fmtClock(clockOf(s, o.deadline).minute)})</span>
+        ${canFill ? `<button data-act="fill" data-id="${o.id}">Aus dem Regal nehmen</button>` : ''}</div></div>`;
+    }).join('');
+    return `<section><h2>Bestellungen</h2>
+      ${cards || '<p class="dim small">Gerade keine Bestellungen. Auftraggeber melden sich ab und zu.</p>'}
+      <p class="small dim">Fertige Ware für angenommene Bestellungen kommt nicht ins Regal, sondern wird direkt zurückgelegt.
+      Die Reihenfolge in der Warteschlange entscheidet, was zuerst fertig ist.</p></section>`;
   }
 
   tab_helden(s) {
@@ -266,11 +328,19 @@ export class UI {
           <button data-act="upgrade" data-id="${id}" ${canUpgrade(s, id) ? '' : 'disabled'}>${costStr}</button></div>` : '<div class="small ok">Voll ausgebaut</div>'}</div>`;
     }).join('');
     const areas = Object.entries(AREAS).map(([id, a]) => {
-      const best = s.heroes.length ? Math.max(...s.heroes.map((h) => successChance(h, id))) : 0;
-      return `<div class="row small"><span>${a.icon} ${a.name}</span><span class="dim">Gefahr ${a.danger} · ${a.mat ? MATERIALS[a.mat].icon : '🪙'}</span>
+      const best = s.heroes.length ? Math.max(...s.heroes.map((h) => successChance(h, id, s))) : 0;
+      return `<div class="row small"><span>${a.icon} ${a.name}</span><span class="dim">Gefahr ${Math.round(areaDanger(s, id))} · ${a.mat ? MATERIALS[a.mat].icon : '🪙'}</span>
         <span>beste Chance ${Math.round(best * 100)}%</span></div>`;
     }).join('');
-    return `<section><h2>Eichenfurt</h2>${bs}</section><section><h2>Umgebung</h2>${areas}</section>
+    const projects = Object.entries(PROJECTS).map(([id, p]) => {
+      const done = s.projects[id] !== undefined;
+      return `<div class="card project ${done ? 'done' : ''}"><div class="row"><b>${p.icon} ${p.name}</b>
+        ${done ? '<span class="ok small">errichtet</span>' : `<button data-act="project" data-id="${id}" ${s.gold < p.cost ? 'disabled' : ''}>${p.cost.toLocaleString('de-DE')} 🪙</button>`}</div>
+        <div class="small ${done ? 'dim' : ''}">${p.desc}</div></div>`;
+    }).join('');
+    return `${this.goalCard(s)}<section><h2>Gebäude</h2>${bs}</section>
+      <section><h2>Dorfprojekte</h2><p class="small dim">Einmalige Investitionen mit dauerhaftem Nutzen.</p>${projects}</section>
+      <section><h2>Umgebung</h2>${areas}</section>
       <section><h2>Ruf</h2><p class="small">Ruf des Dorfes: <b>${s.reputation}</b>. Je besser dein Ruf, desto öfter und desto erfahrenere Helden kommen.</p></section>`;
   }
 
@@ -352,9 +422,36 @@ export class UI {
       <p class="small dim">${fmtDuration(minutes)} Spielzeit vergangen${info.capped ? ` (begrenzt durch das Lagerhaus)` : ''}.</p>
       <div class="stats"><div><b>${goldDiff >= 0 ? '+' : ''}${goldDiff}</b>🪙 Gold</div><div><b>${sold}</b>verkauft</div>
       <div><b>${succ}/${adv}</b>Abenteuer</div></div>
+      ${s.event ? `<button class="event-btn" data-act="event">${EVENT_BY_ID[s.event.id].icon} <b>${EVENT_BY_ID[s.event.id].title}</b><span>Entscheidung nötig ›</span></button>` : ''}
+      ${s.orders.some((o) => o.state === 'offered') ? `<button class="event-btn order" data-act="tab" data-id="auftraege">🧾 <b>Bestellanfrage wartet</b><span>Ansehen ›</span></button>` : ''}
       ${list || '<p class="dim">Ruhige Zeiten in Eichenfurt.</p>'}
       ${entries.length > 80 ? `<p class="small dim">… und ${entries.length - 80} weitere Einträge in der Chronik.</p>` : ''}
       <button class="wide" data-act="close">Weiter</button>`);
+  }
+
+  showEvent() {
+    const s = this.s;
+    const ev = s.event;
+    if (!ev) return this.closeModal();
+    const def = EVENT_BY_ID[ev.id];
+    const val = (x) => (typeof x === 'function' ? x(ev.data, s) : x);
+    const opts = def.options.map((o, i) => {
+      const cost = eventCost(s, ev, o);
+      const parts = [];
+      if (cost.gold) parts.push(`${cost.gold} 🪙`);
+      for (const [m, n] of Object.entries(cost.mats ?? {})) parts.push(`${n}× ${MATERIALS[m].icon}`);
+      if (cost.potion) parts.push(`${cost.potion}× Heiltrank aus dem Regal`);
+      const ok = canPay(s, cost);
+      return `<button class="option" data-act="choose" data-i="${i}" ${ok ? '' : 'disabled'}>
+        <b>${esc(val(o.label))}</b>${parts.length ? `<span class="cost">${parts.join(' · ')}</span>` : ''}
+        ${o.desc ? `<small>${esc(val(o.desc))}</small>` : ''}</button>`;
+    }).join('');
+    const fallback = val(def.options[def.options.length - 1].label);
+    this.openModal(`<h2>${def.icon} ${def.title}</h2>
+      <p>${rich(def.text(ev.data))}</p>
+      <div class="options">${opts}</div>
+      <p class="small dim">Entscheide bis ${fmtClock(clockOf(s, ev.expires).minute)} Uhr (noch ${fmtDuration(ev.expires - s.t)}), sonst: „${esc(fallback)}“.</p>
+      <button class="wide link" data-act="close">Später entscheiden</button>`);
   }
 
   showSettings() {
@@ -390,13 +487,22 @@ export class UI {
     const s = this.s;
     const id = el.dataset.id;
     switch (el.dataset.act) {
-      case 'tab': this.tab = id; this.buildNav(); this.$('#panel').scrollTop = 0; break;
+      case 'tab': this.tab = id; this.buildNav(); this.$('#panel').scrollTop = 0; if (this.modal) this.closeModal(); break;
       case 'settings': return this.showSettings();
       case 'close': return this.closeModal();
       case 'hero': return this.showHero(Number(id));
       case 'rfilter': this.recipeFilter = id; break;
       case 'craft': if (!queueCraft(s, id)) this.toast('Nicht genug Material oder Warteschlange voll.'); break;
       case 'unqueue': cancelQueued(s, Number(el.dataset.i)); break;
+      case 'prio': prioritizeQueued(s, Number(el.dataset.i)); break;
+      case 'event': return this.showEvent();
+      case 'choose':
+        if (resolveEvent(s, Number(el.dataset.i))) { this.closeModal(); this.toast('Entschieden!'); }
+        break;
+      case 'accept': if (acceptOrder(s, Number(id))) this.toast('Bestellung angenommen.'); break;
+      case 'decline': declineOrder(s, Number(id)); break;
+      case 'fill': fillOrderFromShelf(s, Number(id)); break;
+      case 'project': if (buildProject(s, id)) this.toast(`${PROJECTS[id].name} errichtet!`); break;
       case 'buymat': buyMaterial(s, id, Number(el.dataset.n)); break;
       case 'price': s.prices[id] = Number(el.dataset.l); break;
       case 'sell': {
@@ -426,6 +532,7 @@ export class UI {
         break;
       default: return;
     }
+    afterAction(s);
     this.game.save();
     this.pointerDown = false;
     this.render();
