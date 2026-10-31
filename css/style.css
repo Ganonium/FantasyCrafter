@@ -226,3 +226,5 @@ textarea { width: 100%; margin-top: 8px; background: #15110d; color: var(--text)
 .entry.k-event .txt { color: #f2c98a; }
 .entry.k-goal .txt { color: var(--gold); font-weight: bold; }
 .entry.k-order .txt { color: #cfe0f6; }
+
+.recipe .interest { margin-top: 3px; }

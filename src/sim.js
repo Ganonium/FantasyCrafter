@@ -253,6 +253,8 @@ export function evaluateAreas(s, h) {
     if (h.mood > 75) threshold -= 0.05;
     if (h.mood < 30) threshold += 0.08;
     if (bountyValue > avgGold * 1.5) threshold -= has(h, 'gierig') ? 0.15 : 0.07;
+    // Geldnot: Wer pleite ist, muss irgendwann losziehen – sonst bliebe er für immer in der Taverne sitzen
+    if (h.gold < 40) threshold -= 0.12;
     threshold = Math.max(0.2, Math.min(0.9, threshold));
 
     let value = p * (avgGold + bountyValue * greed);

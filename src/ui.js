@@ -183,7 +183,8 @@ export class UI {
           <span class="dim small">${r.slot === 'weapon' ? 'Waffe' : r.slot === 'armor' ? 'Rüstung' : 'Trank'} · ${fmtDuration(craftTime(s, id))} · ~${fairPrice(id)} 🪙</span></div>
         <div class="rbot"><span>${matList(s, r.mats)}</span>
           ${locked ? `<span class="dim small">🔒 Schmiede St. ${r.tier}</span>`
-            : `<button data-act="craft" data-id="${id}" ${ok ? '' : 'disabled'}>Herstellen</button>`}</div></div>`;
+            : `<button data-act="craft" data-id="${id}" ${ok ? '' : 'disabled'}>Herstellen</button>`}</div>
+        ${locked ? '' : this.interestHtml(s, id) + this.stockHtml(s, id)}</div>`;
     }).join('');
 
     const mats = Object.entries(MATERIALS).map(([id, m]) => `<div class="matrow">
@@ -210,13 +211,7 @@ export class UI {
       const fair = fairPrice(id);
       const btns = PRICE_LEVELS.map((p, i) => `<button data-act="price" data-id="${id}" data-l="${i}" class="${i === lvl ? 'active' : ''}">
         ${p.name}<small>${Math.round(fair * p.mult)}</small></button>`).join('');
-      let interest = '';
-      if (r.cls) {
-        const fans = s.heroes.filter((h) => h.cls === r.cls && (h[r.slot] ? RECIPES[h[r.slot]].tier : 0) < r.tier);
-        interest = fans.length
-          ? `<div class="small">Interesse: ${fans.map((h) => `<span class="${h.gold >= priceOf(s, id) ? 'ok' : 'dim'}">${esc(h.name.split(' ')[0])} (${Math.floor(h.gold)} 🪙)</span>`).join(', ')}</div>`
-          : '<div class="small dim">Gerade braucht das niemand.</div>';
-      }
+      const interest = this.interestHtml(s, id);
       return `<div class="card"><div class="row"><b>${r.name}</b> <span class="tier">${'★'.repeat(r.tier)}</span>
         <span>${n ? `${n}× im Regal` : '<span class="dim">in Arbeit</span>'}</span></div>
         <div class="seg prices">${btns}</div>${interest}
@@ -267,6 +262,31 @@ export class UI {
       </section>
       <section><h2>Was die Helden davon halten</h2>${opinions}
         <p class="small dim">Ob sie wirklich gehen, entscheiden sie selbst – nach Laune, Tagesform, Gier und Mut.</p></section>`;
+  }
+
+  // Welche Helden hätten gern dieses Rezept? (Laden und Werkstatt)
+  interestHtml(s, id) {
+    const r = RECIPES[id];
+    const price = priceOf(s, id);
+    if (r.slot === 'potion') {
+      const without = s.heroes.filter((h) => h.potions === 0);
+      return without.length
+        ? `<div class="small interest">Ohne Heiltrank: ${without.map((h) => `<span class="${h.gold >= price * 1.5 ? 'ok' : 'dim'}">${esc(h.name.split(' ')[0])}</span>`).join(', ')}</div>`
+        : '<div class="small dim interest">Alle Helden haben einen Heiltrank dabei.</div>';
+    }
+    const fans = s.heroes.filter((h) => h.cls === r.cls && (h[r.slot] ? RECIPES[h[r.slot]].tier : 0) < r.tier);
+    return fans.length
+      ? `<div class="small interest">Interesse: ${fans.map((h) => `<span class="${h.gold >= price ? 'ok' : 'dim'}">${esc(h.name.split(' ')[0])} (${Math.floor(h.gold)} 🪙)</span>`).join(', ')}</div>`
+      : '<div class="small dim interest">Gerade braucht das niemand.</div>';
+  }
+
+  stockHtml(s, id) {
+    const shelf = s.shelf.filter((x) => x.recipe === id).length;
+    const work = s.queue.filter((x) => x === id).length + s.slots.filter((j) => j?.recipe === id).length;
+    const parts = [];
+    if (shelf) parts.push(`${shelf} im Regal`);
+    if (work) parts.push(`${work} in Arbeit`);
+    return parts.length ? `<div class="small dim">📦 ${parts.join(' · ')}</div>` : '';
   }
 
   orderMark(s, recipe) {
