@@ -6,7 +6,7 @@ import {
 import {
   clockOf, building, heroPower, successChance, evaluateAreas, priceOf, xpNeeded, canCraft, queueCraft,
   cancelQueued, buyMaterial, sellFromShelf, postBounty, cancelBounty, upgradeCost, canUpgrade, upgrade,
-  activeEffects, resolveEvent, eventCost, canPay, acceptOrder, declineOrder, fillOrderFromShelf, currentGoal,
+  logClock, activeEffects, resolveEvent, eventCost, canPay, acceptOrder, declineOrder, fillOrderFromShelf, currentGoal,
   buildProject, prioritizeQueued, craftTime, matPrice, areaDanger, afterAction,
 } from './sim.js';
 import { EVENT_BY_ID } from './events.js';
@@ -16,7 +16,7 @@ import { renderPortrait } from './sprites.js';
 const KIND_ICON = {
   depart: '🚶', success: '✅', fail: '🤕', escape: '🧪', story: '📖', buy: '🛒', deliver: '📦', refuse: '💬',
   arrive: '👋', leave: '🚪', level: '⭐', banter: '🍺', craft: '🔨', bounty: '📋', build: '🏗️', info: '📜',
-  event: '📯', order: '🧾', goal: '🎯',
+  event: '📯', order: '🧾', goal: '🎯', broken: '💥',
 };
 
 const TABS = [
@@ -63,9 +63,9 @@ function moodIcon(m) {
 }
 
 function heroState(s, h) {
-  if (h.state === 'away') return `unterwegs: ${AREAS[h.area].icon} ${AREAS[h.area].name} · zurück ca. ${fmtClock(clockOf(s, h.until).minute)}`;
-  if (h.state === 'rest') return `ruht sich aus (bis ${fmtClock(clockOf(s, h.until).minute)})`;
-  if (h.state === 'injured') return `verletzt 🩹 (bis ${fmtClock(clockOf(s, h.until).minute)})`;
+  if (h.state === 'away') return `unterwegs: ${AREAS[h.area].icon} ${AREAS[h.area].name} · zurück in ca. ${fmtDuration(h.until - s.t)}`;
+  if (h.state === 'rest') return `ruht sich aus (noch ${fmtDuration(h.until - s.t)})`;
+  if (h.state === 'injured') return `verletzt 🩹 (noch ${fmtDuration(h.until - s.t)})`;
   return 'in der Taverne';
 }
 
@@ -121,7 +121,7 @@ export class UI {
     let day = null;
     let html = '';
     for (const e of entries) {
-      const c = clockOf(s, e.t);
+      const c = logClock(s, e);
       if (c.day !== day) { day = c.day; html += `<h3 class="day">Tag ${day}</h3>`; }
       html += `<div class="entry k-${e.kind}" ${e.hero ? `data-act="hero" data-id="${e.hero}"` : ''}>
         <span class="time">${fmtClock(c.minute)}</span><span class="ico">${KIND_ICON[e.kind] ?? '•'}</span>
@@ -391,7 +391,7 @@ export class UI {
         return `<div class="row small"><span>${a.icon} ${a.name}${h.fav === e.id ? ' ❤️' : ''}</span><span>${Math.round(e.p * 100)}% · ${why}</span></div>`;
       }).join('');
       const recent = s.log.filter((e) => e.hero === h.id).slice(-6).reverse()
-        .map((e) => `<div class="entry small"><span class="time">${fmtClock(clockOf(s, e.t).minute)}</span><span class="txt">${rich(e.text)}</span></div>`).join('');
+        .map((e) => `<div class="entry small"><span class="time">${fmtClock(logClock(s, e).minute)}</span><span class="txt">${rich(e.text)}</span></div>`).join('');
       return `<div class="herohead"><canvas id="portrait" width="144" height="216"></canvas>
         <div><h2>${esc(h.name)}</h2>
           <div>${CLASSES[h.cls].icon} ${className(h.cls, h.female)} · Stufe ${h.level}</div>
@@ -436,7 +436,7 @@ export class UI {
     const goldDiff = Math.floor(s.gold - before.gold);
     const adv = s.stats.adventures - before.adventures;
     const succ = s.stats.successes - before.successes;
-    const list = entries.slice(0, 80).map((e) => `<div class="entry k-${e.kind}"><span class="time">${fmtClock(clockOf(s, e.t).minute)}</span>
+    const list = entries.slice(0, 80).map((e) => `<div class="entry k-${e.kind}"><span class="time">${fmtClock(logClock(s, e).minute)}</span>
       <span class="ico">${KIND_ICON[e.kind] ?? '•'}</span><span class="txt">${rich(e.text)}</span></div>`).join('');
     this.openModal(`<h2>Während du fort warst …</h2>
       <p class="small dim">${fmtDuration(minutes)} Spielzeit vergangen${info.capped ? ` (begrenzt durch das Lagerhaus)` : ''}.</p>
@@ -479,7 +479,9 @@ export class UI {
     this.openModal(`<h2>Einstellungen</h2>
       <h3>Spieltempo</h3>
       <div class="seg">${speeds.map((v) => `<button data-act="speed" data-v="${v}" class="${this.game.speed === v ? 'active' : ''}">${v}×</button>`).join('')}</div>
-      <p class="small dim">1× ist das echte Tempo (Abenteuer dauern 30 Min. bis 4 Std.). Höhere Stufen sind zum Testen da.
+      <p class="small dim">Bei 1× ist eine Spielminute eine echte Minute, und die Uhr oben entspricht deiner Uhrzeit
+      (Abenteuer dauern 30 Min. bis 4 Std.). Höhere Stufen sind zum Testen da – dann läuft die Spieluhr schneller;
+      beim Zurückschalten auf 1× wird sie wieder an die echte Uhr angeglichen.
       Auch per URL: <code>?speed=60</code></p>
       <h3>Spielstand</h3>
       <p class="small dim">Der Spielstand liegt nur in diesem Browser. Mit dem Code kannst du ihn sichern oder auf ein anderes Gerät mitnehmen.</p>

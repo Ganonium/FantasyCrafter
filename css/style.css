@@ -228,3 +228,4 @@ textarea { width: 100%; margin-top: 8px; background: #15110d; color: var(--text)
 .entry.k-order .txt { color: #cfe0f6; }
 
 .recipe .interest { margin-top: 3px; }
+.entry.k-broken .txt { color: #f0b0a4; }

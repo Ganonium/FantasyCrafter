@@ -144,6 +144,12 @@ export const T = {
     mutig: ['„War doch gar nicht so schlimm“, sagt {n}, während der Heiler die Wunden näht.'],
     spendabel: ['{n} wirft dem Bettler am Tor eine Goldmünze zu.'],
   },
+  gearBroken: [
+    '{n} kehrt ohne {x} zurück – das gute Stück ist im Kampf gegen {F} zerbrochen.',
+    'Von {x} ist nur noch Schrott übrig. {n} legt die Trümmer traurig auf deinen Tresen.',
+    '{x} hat den Ausflug {zu} nicht überlebt. {n} braucht Ersatz.',
+    '{n} hält die Überreste von {x} hoch. „Kannst du das reparieren?“ Nein. Kann man nicht.',
+  ],
   levelUp: [
     '{n} ist jetzt Stufe {x}. In der Taverne gibt {er} eine Runde aus.',
     '{n} wird erfahrener – Stufe {x}!',
