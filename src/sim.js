@@ -64,6 +64,7 @@ function addV2Fields(s) {
   s.stats.ordersDone ??= 0;
   s.stats.bountiesPosted ??= 0;
   s.clockOffset ??= 0;
+  s.guestDue ??= null;
 }
 
 export function migrate(s) {
@@ -164,6 +165,24 @@ export function heroPower(h) {
 
 export function areaDanger(s, areaId) {
   return AREAS[areaId].danger * (s ? effectVal(s, 'danger', { area: areaId }) : 1);
+}
+
+// Kraft eines Helden, wenn er dieses Teil statt seines aktuellen trüge
+export function powerWith(h, recipeId) {
+  const slot = RECIPES[recipeId].slot;
+  return heroPower({ ...h, [slot]: recipeId });
+}
+
+export function gearPower(recipeId) {
+  const rc = RECIPES[recipeId];
+  if (rc.slot === 'weapon') return WEAPON_POWER[rc.tier];
+  if (rc.slot === 'armor') return ARMOR_POWER[rc.tier];
+  return 0;
+}
+
+// Erwartete Stunden bis zum nächsten Neuankömmling (nur tagsüber, solange Zimmer frei sind)
+export function arrivalChance(s) {
+  return Math.min(0.6, (0.06 + s.reputation * 0.004) * effectVal(s, 'arrival'));
 }
 
 export function successChance(h, areaId, s = null) {
@@ -893,6 +912,10 @@ export function upgrade(s, id) {
   s.buildings[id]++;
   if (id === 'schmiede') while (s.slots.length < building(s, 'schmiede').slots) s.slots.push(null);
   log(s, 'build', `${BUILDINGS[id].icon} **${BUILDINGS[id].name}** ausgebaut auf Stufe ${s.buildings[id]}.`);
+  if (id === 'taverne') {
+    s.guestDue = s.t + makeRng(s).int(60, 180);
+    log(s, 'build', 'Es spricht sich herum: In der Taverne von Eichenfurt sind Zimmer frei.');
+  }
   return true;
 }
 
@@ -930,8 +953,10 @@ function stepMinute(s, r) {
   if (s.t >= s.nextArrival) {
     s.nextArrival = s.t + 60;
     const cap = building(s, 'taverne').heroes;
-    const chance = Math.min(0.6, (0.06 + s.reputation * 0.004) * effectVal(s, 'arrival'));
-    if (s.heroes.length < cap && !isNight(s) && r.chance(chance)) {
+    // Nach einem Taverne-Ausbau kommt garantiert bald jemand; sonst entscheidet der Ruf
+    const due = s.guestDue !== null && s.t >= s.guestDue;
+    if (s.heroes.length < cap && !isNight(s) && (due || r.chance(arrivalChance(s)))) {
+      s.guestDue = null;
       const lvl = Math.max(1, Math.min(8, 1 + Math.floor(Math.sqrt(s.reputation) / 3) + r.int(-1, 1)));
       addHero(s, r, { level: lvl });
     }

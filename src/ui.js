@@ -7,7 +7,7 @@ import {
   clockOf, building, heroPower, successChance, evaluateAreas, priceOf, xpNeeded, canCraft, queueCraft,
   cancelQueued, buyMaterial, sellFromShelf, postBounty, cancelBounty, upgradeCost, canUpgrade, upgrade,
   logClock, activeEffects, resolveEvent, eventCost, canPay, acceptOrder, declineOrder, fillOrderFromShelf, currentGoal,
-  buildProject, prioritizeQueued, craftTime, matPrice, areaDanger, afterAction,
+  buildProject, prioritizeQueued, powerWith, gearPower, arrivalChance, craftTime, matPrice, areaDanger, afterAction,
 } from './sim.js';
 import { EVENT_BY_ID } from './events.js';
 import { GOALS, PROJECTS } from './goals.js';
@@ -70,7 +70,8 @@ function heroState(s, h) {
 }
 
 function gearName(id) {
-  return id ? `${RECIPES[id].name} <span class="tier">${'★'.repeat(RECIPES[id].tier)}</span>` : '<span class="dim">–</span>';
+  return id ? `${RECIPES[id].name} <span class="tier">${'★'.repeat(RECIPES[id].tier)}</span> <span class="ok">+${gearPower(id)} Kraft</span>`
+    : '<span class="dim">–</span>';
 }
 
 export class UI {
@@ -180,7 +181,8 @@ export class UI {
       const ok = canCraft(s, id) && s.queue.length < 10;
       return `<div class="recipe ${locked ? 'locked' : ''}">
         <div class="rtop"><b>${r.name}</b> <span class="tier">${'★'.repeat(r.tier)}</span>
-          <span class="dim small">${r.slot === 'weapon' ? 'Waffe' : r.slot === 'armor' ? 'Rüstung' : 'Trank'} · ${fmtDuration(craftTime(s, id))} · ~${fairPrice(id)} 🪙</span></div>
+          <span class="dim small">${r.slot === 'weapon' ? 'Waffe' : r.slot === 'armor' ? 'Rüstung' : 'Trank'} · ${fmtDuration(craftTime(s, id))} · ~${fairPrice(id)} 🪙</span>
+          <span class="small ok">${r.slot === 'potion' ? 'rettet bei einer Niederlage' : `+${gearPower(id)} Kraft`}</span></div>
         <div class="rbot"><span>${matList(s, r.mats)}</span>
           ${locked ? `<span class="dim small">🔒 Schmiede St. ${r.tier}</span>`
             : `<button data-act="craft" data-id="${id}" ${ok ? '' : 'disabled'}>Herstellen</button>`}</div>
@@ -213,6 +215,7 @@ export class UI {
         ${p.name}<small>${Math.round(fair * p.mult)}</small></button>`).join('');
       const interest = this.interestHtml(s, id);
       return `<div class="card"><div class="row"><b>${r.name}</b> <span class="tier">${'★'.repeat(r.tier)}</span>
+        <span class="small ok">${r.slot === 'potion' ? 'Notfall-Trank' : `+${gearPower(id)} Kraft`}</span>
         <span>${n ? `${n}× im Regal` : '<span class="dim">in Arbeit</span>'}</span></div>
         <div class="seg prices">${btns}</div>${interest}
         ${n ? `<button class="link" data-act="sell" data-id="${id}">1 Stück an Händler verkaufen (${Math.floor(fair * 0.5)} 🪙)</button>` : ''}</div>`;
@@ -276,7 +279,7 @@ export class UI {
     }
     const fans = s.heroes.filter((h) => h.cls === r.cls && (h[r.slot] ? RECIPES[h[r.slot]].tier : 0) < r.tier);
     return fans.length
-      ? `<div class="small interest">Interesse: ${fans.map((h) => `<span class="${h.gold >= price ? 'ok' : 'dim'}">${esc(h.name.split(' ')[0])} (${Math.floor(h.gold)} 🪙)</span>`).join(', ')}</div>`
+      ? `<div class="small interest">Interesse: ${fans.map((h) => `<span class="${h.gold >= price ? 'ok' : 'dim'}">${esc(h.name.split(' ')[0])} (${Math.floor(h.gold)} 🪙, Kraft ${heroPower(h)}→${powerWith(h, id)})</span>`).join(', ')}</div>`
       : '<div class="small dim interest">Gerade braucht das niemand.</div>';
   }
 
@@ -326,7 +329,12 @@ export class UI {
         <div class="small">${className(h.cls, h.female)} · Stufe ${h.level} · Kraft ${heroPower(h)}</div>
         <div class="small dim">${heroState(s, h)}</div>
         <div class="thought">„${esc(h.thought)}“</div></div></div>`).join('');
-    return `<section><h2>Helden <span class="dim small">${s.heroes.length}/${cap}</span></h2>${cards}</section>`;
+    const free = cap - s.heroes.length;
+    const hours = Math.max(1, Math.round(1 / arrivalChance(s)));
+    const info = free > 0
+      ? `<p class="small dim">🛏️ ${free} ${free === 1 ? 'Zimmer' : 'Zimmer'} frei. ${s.guestDue !== null ? 'Es hat sich herumgesprochen – bald kommt jemand.' : `Neue Helden kommen tagsüber, bei deinem Ruf (${s.reputation}) etwa alle ${hours} Std.`}</p>`
+      : '<p class="small dim">🛏️ Die Taverne ist voll. Für mehr Helden die Taverne ausbauen.</p>';
+    return `<section><h2>Helden <span class="dim small">${s.heroes.length}/${cap}</span></h2>${info}${cards}</section>`;
   }
 
   paintMinis() {
@@ -397,6 +405,7 @@ export class UI {
           <div>${CLASSES[h.cls].icon} ${className(h.cls, h.female)} · Stufe ${h.level}</div>
           <div class="bar xp"><div style="width:${(h.xp / xpNeeded(h.level)) * 100}%"></div></div>
           <div class="small">Kraft <b>${heroPower(h)}</b> · ${Math.floor(h.gold)} 🪙 · Laune ${moodIcon(h.mood)} ${h.mood}</div>
+          <div class="small dim">Kraft = ${3 + h.level * 2} (Stufe ${h.level})${h.weapon ? ` + ${gearPower(h.weapon)} Waffe` : ''}${h.armor ? ` + ${gearPower(h.armor)} Rüstung` : ''}</div>
           <div class="small dim">${heroState(s, h)}</div>
           <div class="small">Abenteuer: ${h.successes}/${h.adventures} erfolgreich</div></div></div>
         <div class="thought big">„${esc(h.thought)}“</div>
