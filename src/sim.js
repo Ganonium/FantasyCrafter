@@ -63,21 +63,38 @@ function addV2Fields(s) {
   s.stats.areaWins ??= {};
   s.stats.ordersDone ??= 0;
   s.stats.bountiesPosted ??= 0;
+  s.clockOffset ??= 0;
 }
 
 export function migrate(s) {
-  if (s.version === 1) {
-    addV2Fields(s);
-    s.version = 2;
-  }
+  addV2Fields(s);
+  s.version = SAVE_VERSION;
   return s;
 }
 
 // ---------- Hilfsfunktionen ----------
 
 export function clockOf(s, t = s.t) {
-  const total = s.clock0 + t;
+  const total = s.clock0 + s.clockOffset + t;
   return { day: Math.floor(total / 1440) + 1, minute: ((total % 1440) + 1440) % 1440 };
+}
+
+export function logClock(s, e) {
+  if (e.c === undefined) return clockOf(s, e.t);
+  return { day: Math.floor(e.c / 1440) + 1, minute: ((e.c % 1440) + 1440) % 1440 };
+}
+
+// Zeit vergeht ohne Simulation (z. B. Abwesenheit länger als das Lagerhaus erlaubt)
+export function skipTime(s, minutes) {
+  s.clockOffset += minutes;
+}
+
+// Bei Tempo 1× soll die Spieluhr der echten Uhr entsprechen: kleine Abweichungen ausgleichen
+export function syncClock(s, realMinute) {
+  let delta = (realMinute - clockOf(s).minute) % 1440;
+  if (delta > 720) delta -= 1440;
+  if (delta <= -720) delta += 1440;
+  s.clockOffset += delta;
 }
 
 export function isNight(s, t = s.t) {
@@ -90,7 +107,8 @@ export function building(s, id) {
 }
 
 function log(s, kind, text, heroId = null) {
-  s.log.push({ t: s.t, kind, text, hero: heroId });
+  // c = Uhrzeit beim Eintrag (bleibt gleich, auch wenn die Uhr später nachgestellt wird)
+  s.log.push({ t: s.t, c: s.clock0 + s.clockOffset + s.t, kind, text, hero: heroId });
   if (s.log.length > LOG_LIMIT) s.log.splice(0, s.log.length - LOG_LIMIT);
 }
 
@@ -253,6 +271,8 @@ export function evaluateAreas(s, h) {
     if (h.mood > 75) threshold -= 0.05;
     if (h.mood < 30) threshold += 0.08;
     if (bountyValue > avgGold * 1.5) threshold -= has(h, 'gierig') ? 0.15 : 0.07;
+    // Geldnot: Wer pleite ist, muss irgendwann losziehen – sonst bliebe er für immer in der Taverne sitzen
+    if (h.gold < 40) threshold -= 0.12;
     threshold = Math.max(0.2, Math.min(0.9, threshold));
 
     let value = p * (avgGold + bountyValue * greed);
@@ -490,6 +510,15 @@ function returnHome(s, r, h) {
     h.gold -= lost;
     changeMood(h, -14);
     log(s, 'fail', fmt(say(s, r, 'fail', T.fail), h, v) + (lost ? ` (${lost} 🪙 verloren)` : ''), h.id);
+    // Schwere Niederlage (ohne Heiltrank): höchstens ein Ausrüstungsteil kann zerbrechen
+    const gear = ['weapon', 'armor'].filter((slot) => h[slot]);
+    if (gear.length && r.chance(0.15)) {
+      const slot = r.pick(gear);
+      const name = RECIPES[h[slot]].name;
+      h[slot] = null;
+      changeMood(h, -6);
+      log(s, 'broken', fmt(say(s, r, 'gearBroken', T.gearBroken), h, { ...v, x: `**${name}**` }), h.id);
+    }
     h.state = 'injured';
     const base = (r.int(180, 360) + a.danger * 2) * effectVal(s, 'injury');
     h.until = s.t + Math.round(h.cls === 'krieger' ? base * 0.7 : base);

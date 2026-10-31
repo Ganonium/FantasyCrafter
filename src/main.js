@@ -1,6 +1,6 @@
 // Einstieg: Laden/Speichern, Offline-Nachberechnung, Spielschleife.
 
-import { newGame, advance, building } from './sim.js';
+import { newGame, advance, building, skipTime, syncClock } from './sim.js';
 import { loadGame, saveGame, clearSave, exportCode, importCode } from './save.js';
 import { VillageScene } from './scene.js';
 import { UI } from './ui.js';
@@ -20,7 +20,12 @@ function realClockMinute() {
 const game = {
   state: null,
   speed: DEFAULT_SPEED,
-  setSpeed(v) { this.speed = v; this.acc = 0; this.save(); },
+  setSpeed(v) {
+    this.speed = v;
+    this.acc = 0;
+    if (v === 1) syncClock(this.state, realClockMinute());
+    this.save();
+  },
   save() { saveGame(this.state, this.speed, this.simAt); },
   exportCode() { return exportCode(this.state, this.speed); },
   importCode(code) {
@@ -61,19 +66,25 @@ document.getElementById('speed').addEventListener('click', () => ui.showSettings
 // Verpasste Zeit nachrechnen (begrenzt durch das Lagerhaus) und Bericht zeigen
 function catchUp(realMs) {
   const s = game.state;
-  const wanted = Math.floor((realMs / 60000) * game.speed);
+  const exact = (realMs / 60000) * game.speed + game.acc;
+  const wanted = Math.floor(exact);
+  game.acc = exact - wanted; // angefangene Minuten nicht verlieren
   const cap = building(s, 'lager').offline;
   const minutes = Math.min(wanted, cap);
   game.simAt = Date.now();
   if (minutes <= 0) return;
   const before = { t: s.t, gold: s.gold, sold: s.stats.sold, adventures: s.stats.adventures, successes: s.stats.successes };
   advance(s, minutes);
+  // Was über das Lagerhaus-Limit hinausgeht, vergeht ohne Simulation – die Uhr läuft trotzdem weiter
+  if (wanted > cap) skipTime(s, wanted - cap);
+  if (game.speed === 1) syncClock(s, realClockMinute());
   scene.sync(s);
   if (minutes >= OFFLINE_REPORT_MIN) ui.showReport(before, minutes, { capped: wanted > cap });
   game.save();
 }
 
 catchUp(pendingOffline);
+if (game.speed === 1) syncClock(game.state, realClockMinute());
 scene.sync(game.state);
 ui.render();
 
