@@ -88,30 +88,49 @@ if (game.speed === 1) syncClock(game.state, realClockMinute());
 scene.sync(game.state);
 ui.render();
 
-let last = performance.now();
-let lastUi = 0;
-function frame(now) {
-  const dt = now - last;
-  last = now;
-  game.simAt = Date.now();
-  if (dt > 5000) {
-    // Tab war im Hintergrund: wie Offline-Zeit behandeln
-    catchUp(dt);
+// Spielzeit richtet sich nur nach der echten Uhr (Date.now). performance.now() bleibt auf manchen
+// Geräten stehen, solange sie schlafen – eine fortgesetzte Seite würde sonst die Nacht verschlucken.
+function tick() {
+  const nowMs = Date.now();
+  const realDt = nowMs - game.simAt;
+  if (realDt > 5000) {
+    // Seite war pausiert oder im Hintergrund: wie Offline-Zeit behandeln
+    catchUp(realDt);
   } else {
-    game.acc += (dt / 60000) * game.speed;
+    game.simAt = nowMs;
+    if (realDt <= 0) return;
+    game.acc += (realDt / 60000) * game.speed;
     const steps = Math.floor(game.acc);
     if (steps > 0) {
       game.acc -= steps;
       advance(game.state, Math.min(steps, 600));
     }
   }
+}
+
+let lastFrame = performance.now();
+let lastUi = 0;
+function frame(now) {
+  const animDt = Math.max(0, Math.min(now - lastFrame, 100));
+  lastFrame = now;
+  tick();
   scene.sync(game.state);
-  scene.update(Math.min(dt, 100) / 1000);
+  scene.update(animDt / 1000);
   scene.render(game.state, now);
   if (now - lastUi > 1000) { lastUi = now; ui.render(); }
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
+
+// Beim Zurückkehren sofort nachrechnen, nicht erst beim nächsten Bild
+function resume() {
+  if (document.hidden) return;
+  tick();
+  ui.render();
+}
+document.addEventListener('visibilitychange', resume);
+window.addEventListener('pageshow', resume);
+window.addEventListener('focus', resume);
 
 setInterval(() => game.save(), 10000);
 document.addEventListener('visibilitychange', () => { if (document.hidden) game.save(); });
