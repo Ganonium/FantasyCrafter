@@ -53,7 +53,7 @@ Drachen traut, gibt es keine Drachenschuppen. Genauso fehlt die Spinnenseide, we
 
 ## Wirtschaft
 
-- **Grundstoffe** (Eisen, Holz, Stoff, Kräuter) kann man jederzeit beim Händler kaufen.
+- **Grundstoffe** (Eisen, Holz, Stoff, Kräuter) kauft die Werkstatt beim Herstellen automatisch beim Händler; der Preis steht am Knopf. Vorräte, z. B. von der Karawane, werden zuerst verbraucht.
 - **Seltene Materialien** (Wolfsfell, Spinnenseide, Mondkristall, Trollknochen, Drachenschuppe) gibt es nur über
   Kopfgelder. Das Gold wird beim Aushängen hinterlegt und bei Lieferung an den Helden ausgezahlt.
 - **Ausrüstung** in 4 Stufen je Klasse und Slot (Waffe, Rüstung); die Stufen schaltet der Schmiede-Ausbau frei.
@@ -100,6 +100,8 @@ Einträge in der Warteschlange lassen sich nach vorne schieben.
   Wachturm, Bardenbühne, Heldendenkmal (250 bis 3.000 Gold).
 
 ## Chronik
+
+Aufbrüche zu Gebieten stehen nur in der Chronik, wenn ein Held für eines deiner Kopfgelder loszieht.
 
 Jede Situation hat mehrere Textvarianten. Die Simulation meidet die zuletzt benutzten, damit sich nichts direkt
 wiederholt. Dazu kommen Varianten nach Tageszeit, Schatzjagd-Texte und Nachsätze passend zum Wesen der Helden
