@@ -376,7 +376,7 @@ function buyPotion(s, r, h) {
 
 function think(s, r, h) {
   h.nextThink = s.t + r.int(15, 40);
-  const { day, minute } = clockOf(s);
+  const { day } = clockOf(s);
   if (h.formDay !== day) { h.formDay = day; h.form = r.range(0.6, 1.3); }
 
   if (isNight(s)) {
@@ -451,14 +451,11 @@ function think(s, r, h) {
   h.bountyTrip = best.bountyValue > 0;
   h.chance = best.p;
   const v = areaVars(best.id);
-  let tpl;
-  if (best.p < 0.5) tpl = say(s, r, 'departBrave', T.departBrave);
-  else if (h.bountyTrip) tpl = say(s, r, 'departBounty', T.departBounty);
-  else if (effectVal(s, 'gold', { area: best.id }) > 1.5) tpl = say(s, r, 'departTreasure', T.departTreasure);
-  else if (minute < 8 * 60) tpl = say(s, r, 'departMorning', T.departMorning);
-  else if (minute >= 19 * 60) tpl = say(s, r, 'departEvening', T.departEvening);
-  else tpl = say(s, r, 'depart', T.depart);
-  log(s, 'depart', fmt(tpl, h, v), h.id);
+  // In die Chronik kommt ein Aufbruch nur, wenn er einem deiner Kopfgelder gilt
+  if (h.bountyTrip) {
+    const tpl = best.p < 0.5 ? say(s, r, 'departBrave', T.departBrave) : say(s, r, 'departBounty', T.departBounty);
+    log(s, 'depart', fmt(tpl, h, v), h.id);
+  }
   setThought(h, fmt(r.pick(h.bountyTrip ? THOUGHTS.goingBounty : THOUGHTS.going), h, v));
 }
 
@@ -573,14 +570,33 @@ function returnHome(s, r, h) {
 
 // ---------- Werkstatt ----------
 
+// Fehlende Grundstoffe werden beim Herstellen automatisch beim Händler gekauft.
+// Seltene Materialien müssen dagegen auf Lager sein.
+export function craftCost(s, recipeId) {
+  let gold = 0;
+  for (const [m, n] of Object.entries(RECIPES[recipeId].mats)) {
+    const missing = Math.max(0, n - s.mats[m]);
+    if (missing && MATERIALS[m].basic) gold += missing * matPrice(s, m);
+  }
+  return gold;
+}
+
+export function missingRare(s, recipeId) {
+  return Object.entries(RECIPES[recipeId].mats).filter(([m, n]) => !MATERIALS[m].basic && s.mats[m] < n).map(([m]) => m);
+}
+
 export function canCraft(s, recipeId) {
   const rc = RECIPES[recipeId];
   if (rc.tier > building(s, 'schmiede').tier) return false;
-  return Object.entries(rc.mats).every(([m, n]) => s.mats[m] >= n);
+  return missingRare(s, recipeId).length === 0 && s.gold >= craftCost(s, recipeId);
 }
 
 export function queueCraft(s, recipeId) {
   if (!canCraft(s, recipeId) || s.queue.length >= 10) return false;
+  for (const [m, n] of Object.entries(RECIPES[recipeId].mats)) {
+    const missing = Math.max(0, n - s.mats[m]);
+    if (missing) buyMaterial(s, m, missing);
+  }
   for (const [m, n] of Object.entries(RECIPES[recipeId].mats)) s.mats[m] -= n;
   s.queue.push(recipeId);
   fillSlots(s);

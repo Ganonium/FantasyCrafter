@@ -5,9 +5,9 @@ import {
 } from './data.js';
 import {
   clockOf, building, heroPower, successChance, evaluateAreas, priceOf, xpNeeded, canCraft, queueCraft,
-  cancelQueued, buyMaterial, sellFromShelf, postBounty, cancelBounty, upgradeCost, canUpgrade, upgrade,
+  cancelQueued, sellFromShelf, postBounty, cancelBounty, upgradeCost, canUpgrade, upgrade,
   logClock, activeEffects, resolveEvent, eventCost, canPay, acceptOrder, declineOrder, fillOrderFromShelf, currentGoal,
-  buildProject, prioritizeQueued, powerWith, gearPower, arrivalChance, craftTime, matPrice, areaDanger, afterAction,
+  buildProject, prioritizeQueued, craftCost, missingRare, powerWith, gearPower, arrivalChance, craftTime, matPrice, areaDanger, afterAction,
 } from './sim.js';
 import { EVENT_BY_ID } from './events.js';
 import { GOALS, PROJECTS } from './goals.js';
@@ -51,10 +51,11 @@ export function fmtDuration(min) {
   return m ? `${h} Std. ${m} Min.` : `${h} Std.`;
 }
 
-function matList(s, mats, checkStock = true) {
+// Grundstoffe werden beim Herstellen automatisch gekauft – rot markiert sind nur fehlende seltene Materialien
+function matList(s, mats) {
   return Object.entries(mats).map(([m, n]) => {
-    const ok = !checkStock || s.mats[m] >= n;
-    return `<span class="mat ${ok ? '' : 'missing'}">${MATERIALS[m].icon}${n}</span>`;
+    const ok = MATERIALS[m].basic || s.mats[m] >= n;
+    return `<span class="mat ${ok ? '' : 'missing'}" title="${MATERIALS[m].name}">${MATERIALS[m].icon}${n}</span>`;
   }).join(' ');
 }
 
@@ -179,26 +180,28 @@ export class UI {
     const list = recipes.map(([id, r]) => {
       const locked = r.tier > smith.tier;
       const ok = canCraft(s, id) && s.queue.length < 10;
+      const cost = craftCost(s, id);
+      const lacking = missingRare(s, id);
+      const label = lacking.length ? `${lacking.map((m) => MATERIALS[m].icon).join('')} fehlt` : cost ? `Herstellen · ${cost} 🪙` : 'Herstellen';
       return `<div class="recipe ${locked ? 'locked' : ''}">
         <div class="rtop"><b>${r.name}</b> <span class="tier">${'★'.repeat(r.tier)}</span>
           <span class="dim small">${r.slot === 'weapon' ? 'Waffe' : r.slot === 'armor' ? 'Rüstung' : 'Trank'} · ${fmtDuration(craftTime(s, id))} · ~${fairPrice(id)} 🪙</span>
           <span class="small ok">${r.slot === 'potion' ? 'rettet bei einer Niederlage' : `+${gearPower(id)} Kraft`}</span></div>
         <div class="rbot"><span>${matList(s, r.mats)}</span>
           ${locked ? `<span class="dim small">🔒 Schmiede St. ${r.tier}</span>`
-            : `<button data-act="craft" data-id="${id}" ${ok ? '' : 'disabled'}>Herstellen</button>`}</div>
+            : `<button data-act="craft" data-id="${id}" ${ok ? '' : 'disabled'}>${label}</button>`}</div>
         ${locked ? '' : this.interestHtml(s, id) + this.stockHtml(s, id)}</div>`;
     }).join('');
 
     const mats = Object.entries(MATERIALS).map(([id, m]) => `<div class="matrow">
       <span>${m.icon} ${m.name}</span><b>${s.mats[id]}</b>
-      ${m.basic ? `<span class="buy"><button data-act="buymat" data-id="${id}" data-n="1" ${s.gold < matPrice(s, id) ? 'disabled' : ''}>+1</button>
-        <button data-act="buymat" data-id="${id}" data-n="5" ${s.gold < matPrice(s, id) * 5 ? 'disabled' : ''}>+5</button>
-        <span class="small ${matPrice(s, id) > m.price ? 'bad' : matPrice(s, id) < m.price ? 'ok' : 'dim'}">${matPrice(s, id)} 🪙</span></span>`
+      ${m.basic ? `<span class="small ${matPrice(s, id) > m.price ? 'bad' : matPrice(s, id) < m.price ? 'ok' : 'dim'}">Händler: ${matPrice(s, id)} 🪙/Stück</span>`
         : `<span class="dim small">nur über Kopfgeld</span>`}</div>`).join('');
 
     return `<section><h2>Werkplätze</h2>${slots}<h3>Warteschlange</h3>${queue}</section>
       <section><h2>Rezepte</h2>${tabs}${list}</section>
-      <section><h2>Material <span class="dim small">· Händler</span></h2>${mats}</section>`;
+      <section><h2>Lager</h2><p class="small dim">Fehlende Grundstoffe kauft die Werkstatt beim Herstellen automatisch
+      beim Händler. Vorräte (z. B. von der Karawane) werden zuerst verbraucht.</p>${mats}</section>`;
   }
 
   tab_laden(s) {
@@ -523,7 +526,7 @@ export class UI {
       case 'close': return this.closeModal();
       case 'hero': return this.showHero(Number(id));
       case 'rfilter': this.recipeFilter = id; break;
-      case 'craft': if (!queueCraft(s, id)) this.toast('Nicht genug Material oder Warteschlange voll.'); break;
+      case 'craft': if (!queueCraft(s, id)) this.toast('Nicht genug Gold oder Warteschlange voll.'); break;
       case 'unqueue': cancelQueued(s, Number(el.dataset.i)); break;
       case 'prio': prioritizeQueued(s, Number(el.dataset.i)); break;
       case 'event': return this.showEvent();
@@ -534,7 +537,6 @@ export class UI {
       case 'decline': declineOrder(s, Number(id)); break;
       case 'fill': fillOrderFromShelf(s, Number(id)); break;
       case 'project': if (buildProject(s, id)) this.toast(`${PROJECTS[id].name} errichtet!`); break;
-      case 'buymat': buyMaterial(s, id, Number(el.dataset.n)); break;
       case 'price': s.prices[id] = Number(el.dataset.l); break;
       case 'sell': {
         const idx = s.shelf.findIndex((x) => x.recipe === id);
