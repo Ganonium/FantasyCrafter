@@ -346,7 +346,7 @@ function tryShopping(s, r, h) {
       sellToHero(s, h, it.recipe, price, it.idx);
       s.reputation += it.rc.tier;
       h[slot] = it.recipe;
-      let tpl = say(s, r, 'buy', T.buy);
+      let tpl = say(s, r, 'buy.' + slot, T.buy[slot]);
       if (lvl === 0) { tpl = say(s, r, 'buyCheap', T.buyCheap); changeMood(h, 12); }
       else if (lvl === 3) { tpl = say(s, r, 'buyExpensive', T.buyExpensive); changeMood(h, -6); }
       else changeMood(h, 8);
@@ -487,11 +487,14 @@ function returnHome(s, r, h) {
   h.adventures++;
   s.stats.adventures++;
 
-  // eine kleine Geschichte von unterwegs
-  if (r.chance(0.6)) log(s, 'story', fmt(say(s, r, 'story.' + h.area, T.story[h.area]), h, v), h.id);
-
   const roll = r();
   const success = roll < h.chance;
+  // Die Chronik erzählt nur, was dich betrifft: Kopfgeld-Ausflüge und Niederlagen.
+  // Ein gewöhnlicher, erfolgreicher Ausflug läuft still im Hintergrund.
+  const notable = h.bountyTrip || !success;
+
+  // eine kleine Geschichte von unterwegs
+  if (notable && r.chance(0.6)) log(s, 'story', fmt(say(s, r, 'story.' + h.area, T.story[h.area]), h, v), h.id);
   let gold = 0;
   let xp = 0;
   let pieces = 0;
@@ -505,10 +508,10 @@ function returnHome(s, r, h) {
     s.reputation += 1;
     changeMood(h, 8 + (h.fav === h.area ? 4 : 0));
     const tpl = roll > h.chance - 0.1 ? say(s, r, 'successClose', T.successClose) : say(s, r, 'success', T.success);
-    log(s, 'success', fmt(tpl, h, v) + ` (+${gold} 🪙)`, h.id);
+    if (notable) log(s, 'success', fmt(tpl, h, v) + ` (+${gold} 🪙)`, h.id);
     // manchmal ein kleiner Nachsatz passend zum Wesen
     const trait = h.traits.find((t) => T.traitFlavor[t]);
-    if (trait && r.chance(0.25)) log(s, 'story', fmt(say(s, r, 'trait.' + trait, T.traitFlavor[trait]), h, v), h.id);
+    if (notable && trait && r.chance(0.25)) log(s, 'story', fmt(say(s, r, 'trait.' + trait, T.traitFlavor[trait]), h, v), h.id);
     h.state = 'rest';
     h.until = s.t + Math.round((25 + a.time * 0.3) * effectVal(s, 'rest'));
   } else if (h.potions > 0) {

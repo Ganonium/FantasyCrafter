@@ -101,7 +101,9 @@ Einträge in der Warteschlange lassen sich nach vorne schieben.
 
 ## Chronik
 
-Aufbrüche zu Gebieten stehen nur in der Chronik, wenn ein Held für eines deiner Kopfgelder loszieht.
+Aufbrüche und erfolgreiche Rückkehren stehen nur in der Chronik, wenn ein Held für eines deiner Kopfgelder unterwegs
+war. Gewöhnliche Ausflüge laufen still im Hintergrund; Niederlagen, Fluchten, Stufenaufstiege und zerbrochene Ausrüstung
+werden immer erzählt.
 
 Jede Situation hat mehrere Textvarianten. Die Simulation meidet die zuletzt benutzten, damit sich nichts direkt
 wiederholt. Dazu kommen Varianten nach Tageszeit, Schatzjagd-Texte und Nachsätze passend zum Wesen der Helden
