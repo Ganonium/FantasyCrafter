@@ -60,6 +60,9 @@ export const RECIPES = {
   drachenrobe:   { name: 'Drachenrobe',      cls: 'magier', slot: 'armor', tier: 4, mats: { spinnenseide: 2, drachenschuppe: 2 }, time: 170 },
   // Verbrauchsgüter
   heiltrank:     { name: 'Heiltrank',        cls: null, slot: 'potion', tier: 1, mats: { kraeuter: 2 }, time: 15 },
+  // Ereignis-Ware: nur über Ereignisse in die Warteschlange; wird bei Fertigstellung direkt verkauft (payout)
+  regenueberzuege: { name: 'Regenüberzüge', cls: null, slot: 'event', tier: 1, mats: { stoff: 6 }, time: 45,
+    payout: { gold: 110, rep: 2, mood: 4, effect: 'regen' } },
 };
 
 export function materialValue(id) {

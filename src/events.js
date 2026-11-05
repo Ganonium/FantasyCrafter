@@ -3,7 +3,7 @@
 //
 // setup(s, r, api)      → data (wird im Spielstand gespeichert) – darf schon Effekte setzen
 // text(d)               → Beschreibung
-// options[].cost(s, d)  → { gold, mats: {}, potion } (optional)
+// options[].cost(s, d)  → { gold, mats: {}, potion, craft: rezeptId } (optional; craft = Ereignis-Ware in die Werkstatt)
 // options[].apply(s, r, api, d) → Ergebnistext für die Chronik
 
 import { MATERIALS, AREAS } from './data.js';
@@ -84,19 +84,17 @@ export const EVENTS = [
   {
     id: 'regen', icon: '🌧️', title: 'Dauerregen', weight: 2,
     setup(s, r, api) {
-      api.addEffect({ label: 'Dauerregen', icon: '🌧️', dur: 10 * H, mods: [{ key: 'duration', v: 1.35 }, { key: 'moodHour', v: -1 }] });
+      api.addEffect({ label: 'Dauerregen', icon: '🌧️', dur: 10 * H, mods: [{ key: 'duration', v: 1.35 }, { key: 'moodHour', v: -1 }], tag: 'regen' });
       return {};
     },
-    text: () => 'Seit Stunden schüttet es. Abenteuer dauern länger, die Laune sinkt. Mit etwas Stoff könntest du Regenmäntel nähen.',
+    text: () => 'Seit Stunden schüttet es. Abenteuer dauern länger, die Laune sinkt. In deiner Werkstatt könntest du ' +
+      'Regenüberzüge für die Ausrüstung der Helden nähen.',
     options: [
       {
-        label: 'Regenmäntel nähen', desc: 'Verbraucht 6 Stoff, die Helden zahlen gut dafür. Ruf +2.',
-        cost: () => ({ mats: { stoff: 6 } }),
-        apply: (s, r, api) => {
-          s.gold += 110; s.stats.earned += 110; s.reputation += 2;
-          api.moodAll(4);
-          return 'Deine Regenmäntel gehen weg wie warme Semmeln (+110 🪙).';
-        },
+        label: 'Regenüberzüge nähen',
+        desc: 'Kommt vorne in die Warteschlange und belegt einen Werkplatz (45 Min.). Solange es regnet, zahlen die Helden 110 🪙, danach nur die Hälfte. Ruf +2.',
+        cost: () => ({ craft: 'regenueberzuege' }),
+        apply: () => 'Du legst den Stoff zurecht: Regenüberzüge kommen als Nächstes auf den Werktisch.',
       },
       { label: 'Abwarten', apply: () => 'Du wartest, bis der Regen nachlässt.' },
     ],

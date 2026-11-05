@@ -156,14 +156,25 @@ export const T = {
     'Stufe {x}! {n} fühlt sich unbesiegbar. Fast.',
     '{n} hat dazugelernt und erreicht Stufe {x}.',
   ],
-  buy: [
-    '{n} kauft {x} und betrachtet das gute Stück stolz.',
-    '{n} legt das Gold auf den Tresen und nimmt {x} mit.',
-    '{n} probiert {x} an. Passt wie angegossen.',
-    '{n} hat lange auf {x} gespart. Heute ist es so weit.',
-    '{n} schwingt {x} probehalber durch den Laden. Fast wäre ein Regal umgefallen.',
-    '„Das nehm ich!“ {n} zeigt auf {x}.',
-  ],
+  // Kauf-Texte getrennt nach Waffe und Rüstung, damit niemand eine Rüstung „schwingt“
+  buy: {
+    weapon: [
+      '{n} kauft {x} und betrachtet das gute Stück stolz.',
+      '{n} legt das Gold auf den Tresen und nimmt {x} mit.',
+      '{n} hat lange auf {x} gespart. Heute ist es so weit.',
+      '{n} schwingt {x} probehalber durch den Laden. Fast wäre ein Regal umgefallen.',
+      '„Das nehm ich!“ {n} zeigt auf {x}.',
+      '{n} wiegt {x} prüfend in der Hand und nickt zufrieden.',
+    ],
+    armor: [
+      '{n} kauft {x} und betrachtet das gute Stück stolz.',
+      '{n} legt das Gold auf den Tresen und nimmt {x} mit.',
+      '{n} probiert {x} an. Passt wie angegossen.',
+      '{n} hat lange auf {x} gespart. Heute ist es so weit.',
+      '„Das nehm ich!“ {n} zeigt auf {x}.',
+      '{n} dreht sich in {x} vor dem Spiegel. „Steht mir, oder?“',
+    ],
+  },
   buyCheap: [
     '{n} kauft {x} und kann {sein} Glück kaum fassen. „Zu dem Preis? Gekauft!“',
     '{n} schlägt bei {x} sofort zu. „Ein Schnäppchen!“',

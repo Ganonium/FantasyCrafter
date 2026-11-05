@@ -208,7 +208,8 @@ export class UI {
     const cap = building(s, 'laden').shelf;
     const groups = {};
     for (const it of s.shelf) groups[it.recipe] = (groups[it.recipe] ?? 0) + 1;
-    const ids = new Set([...Object.keys(groups), ...s.queue, ...s.slots.filter(Boolean).map((j) => j.recipe)]);
+    const ids = new Set([...Object.keys(groups), ...s.queue, ...s.slots.filter(Boolean).map((j) => j.recipe)]
+      .filter((id) => RECIPES[id].slot !== 'event'));
     const rows = [...ids].map((id) => {
       const r = RECIPES[id];
       const lvl = s.prices[id] ?? 1;
@@ -296,6 +297,7 @@ export class UI {
   }
 
   orderMark(s, recipe) {
+    if (RECIPES[recipe].payout) return ' <span title="Ereignis-Ware, wird direkt verkauft">📯</span>';
     return s.orders.some((o) => o.state === 'active' && o.lines.some((l) => l.recipe === recipe && l.filled < l.qty)) ? ' <span title="für eine Bestellung">🧾</span>' : '';
   }
 
@@ -473,6 +475,14 @@ export class UI {
       if (cost.gold) parts.push(`${cost.gold} 🪙`);
       for (const [m, n] of Object.entries(cost.mats ?? {})) parts.push(`${n}× ${MATERIALS[m].icon}`);
       if (cost.potion) parts.push(`${cost.potion}× Heiltrank aus dem Regal`);
+      if (cost.craft) {
+        const rc = RECIPES[cost.craft];
+        const buy = craftCost(s, cost.craft);
+        const lacking = missingRare(s, cost.craft);
+        parts.push(`${matList(s, rc.mats)}${buy ? ` · ${buy} 🪙 beim Händler` : ' aus dem Lager'} · ${fmtDuration(craftTime(s, cost.craft))} Werkplatz`);
+        if (s.queue.length >= 10) parts.push('Warteschlange voll');
+        if (lacking.length) parts.push(`${lacking.map((m) => MATERIALS[m].name).join(', ')} fehlt`);
+      }
       const ok = canPay(s, cost);
       return `<button class="option" data-act="choose" data-i="${i}" ${ok ? '' : 'disabled'}>
         <b>${esc(val(o.label))}</b>${parts.length ? `<span class="cost">${parts.join(' · ')}</span>` : ''}

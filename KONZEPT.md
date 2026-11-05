@@ -73,7 +73,7 @@ Aktive Einflüsse stehen als Chips unter der Dorfszene.
 | 🐪 Händlerkarawane | seltene Materialien teuer kaufen, Grundstoffe im Großeinkauf oder nichts |
 | 🐺 Wolfsplage | Prämie ausloben (Finsterwald bringt 8 Std. 2,5× Gold) oder vertrösten (Finsterwald gefährlicher) |
 | 🏆 Turnier | Preisgeld stiften (danach spendable Helden) oder nur zuschauen; so oder so zieht ein paar Stunden niemand los |
-| 🌧️ Dauerregen | Abenteuer dauern länger; aus Stoff Regenmäntel nähen und verkaufen |
+| 🌧️ Dauerregen | Abenteuer dauern länger; Regenüberzüge nähen: kommen vorne in die Warteschlange (Stoff wird gekauft), bringen 110 🪙 – nur die Hälfte, wenn der Regen schon vorbei ist |
 | ⛓️ Eisenmangel | Eisen kostet 16 Std. das Dreifache; letzten Wagen zum alten Preis kaufen? |
 | ⚒️ Meisterschmied | anheuern: 8 Std. lang 60 % schneller schmieden |
 | 🌾 Erntefest | großes Fest (Laune hoch, aber niemand zieht los), Fass spendieren oder nichts |
@@ -101,7 +101,9 @@ Einträge in der Warteschlange lassen sich nach vorne schieben.
 
 ## Chronik
 
-Aufbrüche zu Gebieten stehen nur in der Chronik, wenn ein Held für eines deiner Kopfgelder loszieht.
+Aufbrüche und erfolgreiche Rückkehren stehen nur in der Chronik, wenn ein Held für eines deiner Kopfgelder unterwegs
+war. Gewöhnliche Ausflüge laufen still im Hintergrund; Niederlagen, Fluchten, Stufenaufstiege und zerbrochene Ausrüstung
+werden immer erzählt.
 
 Jede Situation hat mehrere Textvarianten. Die Simulation meidet die zuletzt benutzten, damit sich nichts direkt
 wiederholt. Dazu kommen Varianten nach Tageszeit, Schatzjagd-Texte und Nachsätze passend zum Wesen der Helden
