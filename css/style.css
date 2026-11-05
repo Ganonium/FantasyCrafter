@@ -229,3 +229,10 @@ textarea { width: 100%; margin-top: 8px; background: #15110d; color: var(--text)
 
 .recipe .interest { margin-top: 3px; }
 .entry.k-broken .txt { color: #f0b0a4; }
+
+/* Bericht: Das Wichtigste */
+.summary { list-style: none; padding: 0; margin: 6px 0 10px; display: flex; flex-direction: column; gap: 4px; }
+.summary li { display: grid; grid-template-columns: 22px 1fr; gap: 4px; font-size: 14px; background: var(--card);
+  border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; }
+.summary li.hint { border-color: #8a6a30; color: #f2c98a; }
+.wish { color: #f2d68a; margin-top: 2px; }

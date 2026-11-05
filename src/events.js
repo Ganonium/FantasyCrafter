@@ -63,13 +63,13 @@ export const EVENTS = [
       'heute zieht so bald niemand los.',
     options: [
       {
-        label: 'Preisgeld stiften', desc: '4 Std. Turnier, danach 12 Std. spendable Helden (+1 Preisstufe). Ruf +6.',
+        label: 'Preisgeld stiften', desc: '4 Std. Turnier, danach 12 Std. Turnierruhm: Die Helden trauen sich mehr zu. Ruf +6.',
         cost: () => ({ gold: 100 }),
         apply: (s, r, api) => {
           api.addEffect({ label: 'Turnier', icon: '🏆', dur: 4 * H, mods: [{ key: 'depart', v: 0 }, { key: 'moodHour', v: 3 }] });
-          api.addEffect({ label: 'Turnierruhm', icon: '✨', dur: 16 * H, mods: [{ key: 'priceTol', v: 1 }] });
+          api.addEffect({ label: 'Turnierruhm', icon: '✨', dur: 16 * H, mods: [{ key: 'courage', v: 0.1 }] });
           s.reputation += 6;
-          return 'Dein Preisgeld macht das Turnier zum Ereignis des Jahres. Die Helden sind in Kauflaune.';
+          return 'Dein Preisgeld macht das Turnier zum Ereignis des Jahres. Die Helden fühlen sich unbesiegbar.';
         },
       },
       {
@@ -280,17 +280,17 @@ export const EVENTS = [
     id: 'konkurrenz', icon: '🛒', title: 'Konkurrenz am Markt', weight: 1,
     cond: (s) => s.stats.sold >= 5,
     setup(s, r, api) {
-      api.addEffect({ label: 'Konkurrenz', icon: '🛒', dur: 12 * H, mods: [{ key: 'priceTol', v: -1 }], tag: 'konkurrenz' });
+      api.addEffect({ label: 'Konkurrenz', icon: '🛒', dur: 12 * H, mods: [{ key: 'buyChance', v: 0.5 }], tag: 'konkurrenz' });
       return {};
     },
-    text: () => 'Ein fahrender Waffenhändler baut am Markt seinen Stand auf. Die Helden vergleichen jetzt Preise – ' +
-      'teure Ware bleibt liegen.',
+    text: () => 'Ein fahrender Waffenhändler baut am Markt seinen Stand auf. Viele Helden schauen jetzt erst einmal dort ' +
+      'vorbei, bevor sie bei dir kaufen.',
     options: [
       {
         label: 'Ihn zum Weiterziehen bewegen', desc: 'Beendet die Konkurrenz sofort.', cost: () => ({ gold: 70 }),
         apply: (s, r, api) => { api.removeEffect('konkurrenz'); return 'Ein Beutel Gold, und der Händler hat es plötzlich eilig.'; },
       },
-      { label: 'Konkurrenz belebt das Geschäft', desc: '12 Std. lang sind die Helden wählerischer.', apply: () => 'Du lässt ihn gewähren und senkst vielleicht ein paar Preise.' },
+      { label: 'Konkurrenz belebt das Geschäft', desc: '12 Std. lang kaufen die Helden nur halb so oft bei dir.', apply: () => 'Du lässt ihn gewähren. Soll er doch versuchen, mit deiner Ware mitzuhalten.' },
     ],
   },
 ];

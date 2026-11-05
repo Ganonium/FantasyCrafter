@@ -9,7 +9,7 @@ schlicht davon, ob sie „Bock“ haben.
 
 Du beeinflusst sie nur indirekt:
 
-- **Was du herstellst und zu welchem Preis** (bessere Ausrüstung → mehr Mut → gefährlichere Gebiete)
+- **Was du herstellst und in welcher Reihenfolge** (bessere Ausrüstung → mehr Mut → gefährlichere Gebiete)
 - **Welche Kopfgelder du am Auftragsbrett aushängst** (Belohnung pro Stück für seltene Materialien)
 - **Wie du das Dorf ausbaust** (Schmiede, Laden, Taverne, Lagerhaus)
 
@@ -39,13 +39,15 @@ Drachen traut, gibt es keine Drachenschuppen. Genauso fehlt die Spinnenseide, we
 | **Stufe + Ausrüstung → Kraft** | bestimmt die Erfolgschance pro Gebiet |
 | **Zwei Wesenszüge** | Mutig, Vorsichtig, Gierig, Faul, Eifrig, Ruhmsüchtig, Geizig, Spendabel, Gesellig |
 | **Lieblingsgebiet / verhasstes Gebiet** | „Spinnenhöhle? Nicht für alles Gold der Welt. Ich hasse Spinnen.“ |
-| **Laune** | steigt bei Erfolgen, guten Käufen und in geselliger Runde, sinkt bei Verletzungen und Wucherpreisen; wer lange schlecht gelaunt ist, verlässt das Dorf |
+| **Laune** | steigt bei Erfolgen, Käufen, erfüllten Wünschen und mit Freunden in der Taverne, sinkt bei Verletzungen und Streit; wer lange schlecht gelaunt ist, verlässt das Dorf |
+| **Wunsch** | ein persönliches Ziel: ein bestimmtes Ausrüstungsteil, ein Gebiet bezwingen, eine Stufe, Gold ansparen oder ein Kopfgeld kassieren |
+| **Beziehungen** | Freunde (💛) und Rivalen (⚔️) entstehen im Tavernengeplauder und auf gemeinsamen Ausflügen |
 | **Tagesform** | jeden Tag neu ausgewürfelt; manche Tage hat einfach niemand Lust |
 | **Gold** | eigenes Geld; davon kaufen die Helden bei dir, bezahlen Reparaturen und die Taverne |
 
 **Entscheidung** (alle 15–40 Spielminuten, wenn ausgeruht und nicht nachts):
 
-1. Gibt es im Regal ein bezahlbares Upgrade zu einem akzeptablen Preis? Dann wird gekauft.
+1. Gibt es im Regal ein Upgrade, das sich der Held leisten kann? Dann wird gekauft. Geizige wollen danach noch einen Notgroschen übrig haben.
 2. Jedes Gebiet wird bewertet: Erfolgschance × (Gold + Kopfgeld × Gier) × Vorlieben. Ein Gebiet kommt nur in Frage,
    wenn die Chance über der persönlichen Mutschwelle liegt und es nicht verhasst ist.
 3. „Habe ich Bock?“: Tagesform × Laune × Fleiß, beeinflusst vom eigenen Geldbeutel und von lockenden Kopfgeldern.
@@ -59,8 +61,33 @@ Drachen traut, gibt es keine Drachenschuppen. Genauso fehlt die Spinnenseide, we
 - **Ausrüstung** in 4 Stufen je Klasse und Slot (Waffe, Rüstung); die Stufen schaltet der Schmiede-Ausbau frei.
 - **Heiltränke** sind Verbrauchsgut: Sie retten bei einer Niederlage vor Verletzungen und machen Helden mutiger.
 - **Reparaturen**: Nach jedem Abenteuer lassen Helden ihre Ausrüstung bei dir reparieren, was laufende Einnahmen bringt.
-- **Preisstufen** pro Ware: Günstig / Fair / Teuer / Wucher.
+- **Feste Preise**: Der Laden verkauft immer zum fairen Preis. Dein Einfluss liegt darin, *was* du wann herstellst.
 - **Ladenhüter** kann man für 50 % an den Händler verkaufen.
+
+## Freundschaften und Rivalitäten
+
+- Im **Tavernengeplauder** entscheidet der Ton: Freundliche Runden (Lieder, Karten, Narben vergleichen) bringen Helden
+  einander näher, gereizte (Armdrücken, Streit um den Kaminplatz) treiben sie auseinander. Gesellige Helden sind
+  freundlicher, Ruhmsüchtige und Helden derselben Klasse reiben sich eher.
+- Ab einem gewissen Punkt werden zwei Helden **Freunde** 💛 oder **Rivalen** ⚔️, mit Eintrag in der Chronik.
+- **Freunde** ziehen gemeinsam los. Zusammen sind sie stärker (Kraft des Stärkeren + 60 % des anderen) und trauen sich
+  in Gebiete, die einzeln zu gefährlich wären. Sie teilen denselben Ausgang, sind gern zusammen in der Taverne und
+  sorgen sich, wenn der andere verletzt heimkommt. Geht ein Freund fort, trauert der andere.
+- **Rivalen** stacheln sich an: Ist der Rivale stärker, geht man mehr Risiko ein. Kauft er bessere Ausrüstung oder
+  steigt auf, ärgert man sich.
+
+## Persönliche Wünsche
+
+Jeder Held hat (mit Pausen dazwischen) einen Wunsch, passend zu seinem Wesen: der Ruhmsüchtige will die Trollbrücke
+bezwingen, der Geizige Gold ansparen, der Vorsichtige wünscht sich eine bestimmte Rüstung. Der Wunsch lenkt seine
+Entscheidungen (z. B. lockt das Wunsch-Gebiet). Erfüllt er sich, ist der Held überglücklich (🌟 in der Chronik).
+In Werkstatt und Laden steht 🌟 an Helden, die sich genau dieses Teil wünschen – so kannst du gezielt Träume erfüllen.
+
+## Bericht beim Öffnen
+
+Oben steht „Das Wichtigste“: erfüllte Träume, neue Freundschaften und Rivalitäten, Aufstiege, Kopfgeld-Lieferungen,
+erledigte oder verpasste Bestellungen, zerbrochene Ausrüstung, Neuankömmlinge und Abreisen, wer gerade verletzt ist –
+und Hinweise, wenn die Werkstatt stillsteht oder das Regal leer ist. Darunter folgt alles der Reihe nach.
 
 ## Ereignisse
 
@@ -72,7 +99,7 @@ Aktive Einflüsse stehen als Chips unter der Dorfszene.
 |---|---|
 | 🐪 Händlerkarawane | seltene Materialien teuer kaufen, Grundstoffe im Großeinkauf oder nichts |
 | 🐺 Wolfsplage | Prämie ausloben (Finsterwald bringt 8 Std. 2,5× Gold) oder vertrösten (Finsterwald gefährlicher) |
-| 🏆 Turnier | Preisgeld stiften (danach spendable Helden) oder nur zuschauen; so oder so zieht ein paar Stunden niemand los |
+| 🏆 Turnier | Preisgeld stiften (danach Turnierruhm: Helden trauen sich mehr zu) oder nur zuschauen; so oder so zieht ein paar Stunden niemand los |
 | 🌧️ Dauerregen | Abenteuer dauern länger; Regenüberzüge nähen: kommen vorne in die Warteschlange (Stoff wird gekauft), bringen 110 🪙 – nur die Hälfte, wenn der Regen schon vorbei ist |
 | ⛓️ Eisenmangel | Eisen kostet 16 Std. das Dreifache; letzten Wagen zum alten Preis kaufen? |
 | ⚒️ Meisterschmied | anheuern: 8 Std. lang 60 % schneller schmieden |
@@ -82,7 +109,7 @@ Aktive Einflüsse stehen als Chips unter der Dorfszene.
 | 👺 Goblin-Überfall | Helden als Wachen bezahlen, Stadtwache anfordern oder riskieren (Diebstahl) |
 | 🧙‍♀️ Kräuterfrau | billige Kräuter oder ihr Rezept (Heiltränke doppelt so schnell) |
 | 🎶 Barde | bezahlen, damit er bleibt: bessere Laune, mehr Neuankömmlinge |
-| 🛒 Konkurrenz am Markt | Helden 12 Std. wählerischer bei Preisen; Händler wegschicken? |
+| 🛒 Konkurrenz am Markt | Helden kaufen 12 Std. nur halb so oft bei dir; Händler wegschicken? |
 
 ## Bestellungen
 
@@ -140,7 +167,7 @@ wiederholt. Dazu kommen Varianten nach Tageszeit, Schatzjagd-Texte und Nachsätz
 
 - **Großes Ziel**: Drachensieg, Prestige (neues Dorf gründen, Bonus bleibt)
 - **Weitere Quest-Arten**: Monsterjagd, Eskorte, Rettungsmission für einen verschollenen Helden
-- **Beziehungen**: Freundschaften und Rivalitäten, Heldengruppen ziehen gemeinsam los
+- **Mehr Beziehungen**: Liebe, Lehrer und Schüler, Gruppen aus mehr als zwei Helden
 - **Mehr Ereignisse**: Drachenangriff aufs Dorf, Ketten-Ereignisse über mehrere Tage
 - **Legendäre Gegenstände** mit Namen, Verzauberungen
 - **Erinnerungen**: Helden merken sich, wer ihnen gute Ausrüstung verkauft hat und wo sie verletzt wurden

@@ -73,7 +73,7 @@ function catchUp(realMs) {
   const minutes = Math.min(wanted, cap);
   game.simAt = Date.now();
   if (minutes <= 0) return;
-  const before = { t: s.t, gold: s.gold, sold: s.stats.sold, adventures: s.stats.adventures, successes: s.stats.successes };
+  const before = { t: s.t, gold: s.gold, sold: s.stats.sold, adventures: s.stats.adventures, successes: s.stats.successes, crafted: s.stats.crafted };
   advance(s, minutes);
   // Was über das Lagerhaus-Limit hinausgeht, vergeht ohne Simulation – die Uhr läuft trotzdem weiter
   if (wanted > cap) skipTime(s, wanted - cap);
