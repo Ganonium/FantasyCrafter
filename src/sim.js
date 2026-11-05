@@ -594,14 +594,14 @@ export function canCraft(s, recipeId) {
   return missingRare(s, recipeId).length === 0 && s.gold >= craftCost(s, recipeId);
 }
 
-export function queueCraft(s, recipeId) {
+export function queueCraft(s, recipeId, { front = false } = {}) {
   if (!canCraft(s, recipeId) || s.queue.length >= 10) return false;
   for (const [m, n] of Object.entries(RECIPES[recipeId].mats)) {
     const missing = Math.max(0, n - s.mats[m]);
     if (missing) buyMaterial(s, m, missing);
   }
   for (const [m, n] of Object.entries(RECIPES[recipeId].mats)) s.mats[m] -= n;
-  s.queue.push(recipeId);
+  if (front) s.queue.unshift(recipeId); else s.queue.push(recipeId);
   fillSlots(s);
   return true;
 }
@@ -640,6 +640,11 @@ function processCrafting(s) {
   for (let i = 0; i < s.slots.length; i++) {
     const job = s.slots[i];
     if (!job || job.end > s.t) continue;
+    if (RECIPES[job.recipe].payout) {
+      deliverEventGoods(s, job.recipe);
+      s.slots[i] = null;
+      continue;
+    }
     if (routeToOrder(s, job.recipe)) {
       s.stats.crafted++;
       s.slots[i] = null;
@@ -654,6 +659,24 @@ function processCrafting(s) {
     s.slots[i] = null;
   }
   fillSlots(s);
+}
+
+// Ereignis-Ware geht nicht ins Regal, sondern wird sofort an die Helden verkauft
+function deliverEventGoods(s, recipeId) {
+  const rc = RECIPES[recipeId];
+  const p = rc.payout;
+  const inTime = !p.effect || activeEffects(s).some((e) => e.tag === p.effect);
+  const gold = inTime ? p.gold : Math.round(p.gold / 2);
+  s.gold += gold;
+  s.stats.earned += gold;
+  s.stats.crafted++;
+  if (inTime) {
+    s.reputation += p.rep ?? 0;
+    for (const h of s.heroes) changeMood(h, p.mood ?? 0);
+    log(s, 'event', `🌧️ Deine **${rc.name}** gehen weg wie warme Semmeln. (+${gold} 🪙)`);
+  } else {
+    log(s, 'event', `🌧️ Die **${rc.name}** sind fertig – aber der Regen ist schon vorbei. Nur wenige greifen noch zu. (+${gold} 🪙)`);
+  }
 }
 
 export function buyMaterial(s, mat, n) {
@@ -711,7 +734,7 @@ const CLIENTS = [
 function generateOrder(s, r) {
   const client = r.pick(CLIENTS);
   const maxTier = building(s, 'schmiede').tier;
-  let pool = Object.keys(RECIPES).filter((id) => RECIPES[id].tier <= maxTier);
+  let pool = Object.keys(RECIPES).filter((id) => RECIPES[id].tier <= maxTier && RECIPES[id].slot !== 'event');
   if (client.prefer === 'potion') pool = ['heiltrank'];
   else if (client.prefer) pool = pool.filter((id) => RECIPES[id].cls === client.prefer || id === 'heiltrank');
   // eher die aktuell höchste und die einfachste Stufe
@@ -831,6 +854,7 @@ export function eventCost(s, ev, opt) {
 }
 
 export function canPay(s, cost) {
+  if (cost.craft && (!canCraft(s, cost.craft) || s.queue.length >= 10)) return false;
   if (cost.gold && s.gold < cost.gold) return false;
   if (cost.potion && s.shelf.filter((x) => x.recipe === 'heiltrank').length < cost.potion) return false;
   for (const [m, n] of Object.entries(cost.mats ?? {})) if (s.mats[m] < n) return false;
@@ -838,6 +862,7 @@ export function canPay(s, cost) {
 }
 
 function pay(s, cost) {
+  if (cost.craft) queueCraft(s, cost.craft, { front: true });
   if (cost.gold) s.gold -= cost.gold;
   for (const [m, n] of Object.entries(cost.mats ?? {})) s.mats[m] -= n;
   for (let i = 0; i < (cost.potion ?? 0); i++) s.shelf.splice(s.shelf.findIndex((x) => x.recipe === 'heiltrank'), 1);
