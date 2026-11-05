@@ -78,12 +78,6 @@ export function fairPrice(recipeId) {
   return Math.round(cost * 2.5 + 15 * r.tier * r.tier);
 }
 
-export const PRICE_LEVELS = [
-  { id: 'guenstig', name: 'Günstig', mult: 0.8 },
-  { id: 'fair',     name: 'Fair',    mult: 1.0 },
-  { id: 'teuer',    name: 'Teuer',   mult: 1.3 },
-  { id: 'wucher',   name: 'Wucher',  mult: 1.7 },
-];
 
 // Gebiete: danger = benötigte Kampfkraft für 50 % Erfolg; time in Minuten
 export const AREAS = {
@@ -114,8 +108,8 @@ export const TRAITS = {
   faul:        { name: 'Faul',        desc: 'Bleibt gern länger in der Taverne.' },
   eifrig:      { name: 'Eifrig',      desc: 'Kann nicht stillsitzen.' },
   ruhmsuechtig:{ name: 'Ruhmsüchtig', desc: 'Sucht die Gefahr – je größer, desto besser.' },
-  geizig:      { name: 'Geizig',      desc: 'Kauft nur zu günstigen oder fairen Preisen.' },
-  spendabel:   { name: 'Spendabel',   desc: 'Zahlt auch mal Wucherpreise, wenn die Ware stimmt.' },
+  geizig:      { name: 'Geizig',      desc: 'Kauft erst, wenn danach noch ein Notgroschen übrig bleibt.' },
+  spendabel:   { name: 'Spendabel',   desc: 'Gönnt sich Heiltränke ohne lange zu überlegen.' },
   gesellig:    { name: 'Gesellig',    desc: 'Mag die Taverne und andere Helden.' },
 };
 

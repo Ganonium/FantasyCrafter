@@ -67,18 +67,22 @@ function botVisit() {
   afterAction(s);
 }
 
-let logIdx = 0;
+let logT = -1;
+const printed = new WeakSet();
 for (let d = 0; d < days; d++) {
   for (const v of VISITS) {
     const target = d * 1440 + v - s.clock0;
     if (target > s.t) advance(s, target - s.t);
     botVisit();
     if (showLog) {
-      for (; logIdx < s.log.length; logIdx++) {
-        const e = s.log[logIdx]; const c = clockOf(s, e.t);
+      // Die Chronik wird vorne gekürzt – deshalb über die Zeit statt über den Index weiterlesen
+      for (const e of s.log) {
+        if (e.t < logT || (e.t === logT && printed.has(e))) continue;
+        printed.add(e); logT = e.t;
+        const c = clockOf(s, e.t);
         console.log(`T${c.day} ${String(Math.floor(c.minute / 60)).padStart(2, '0')}:${String(c.minute % 60).padStart(2, '0')}  ${e.text.replace(/\*\*/g, '')}`);
       }
-    } else logIdx = s.log.length;
+    }
   }
   const hs = s.heroes.map((h) => `${h.name.split(' ')[0]}:L${h.level}/P${heroPower(h)}/${h.gold}g`).join(' ');
   console.log(`Tag ${d + 1}: Gold ${s.gold}, Rep ${s.reputation}, Gebäude ${Object.values(s.buildings).join('')}, ` +

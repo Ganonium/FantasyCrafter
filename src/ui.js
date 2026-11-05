@@ -1,22 +1,23 @@
 // Oberfläche: Tabs, Dialoge und Aktionen. Alles wird aus dem Spielstand neu gerendert.
 
 import {
-  MATERIALS, RECIPES, AREAS, TRAITS, BUILDINGS, PRICE_LEVELS, CLASSES, fairPrice, className,
+  MATERIALS, RECIPES, AREAS, TRAITS, BUILDINGS, CLASSES, fairPrice, className,
 } from './data.js';
 import {
   clockOf, building, heroPower, successChance, evaluateAreas, priceOf, xpNeeded, canCraft, queueCraft,
   cancelQueued, sellFromShelf, postBounty, cancelBounty, upgradeCost, canUpgrade, upgrade,
   logClock, activeEffects, resolveEvent, eventCost, canPay, acceptOrder, declineOrder, fillOrderFromShelf, currentGoal,
-  buildProject, prioritizeQueued, craftCost, missingRare, powerWith, gearPower, arrivalChance, craftTime, matPrice, areaDanger, afterAction,
+  buildProject, prioritizeQueued, canAfford, craftCost, missingRare, powerWith, gearPower, arrivalChance, craftTime, matPrice, areaDanger, afterAction,
 } from './sim.js';
 import { EVENT_BY_ID } from './events.js';
+import { goalProgress, friendsOf, rivalsOf, wantsRecipe, relation } from './social.js';
 import { GOALS, PROJECTS } from './goals.js';
 import { renderPortrait } from './sprites.js';
 
 const KIND_ICON = {
   depart: '🚶', success: '✅', fail: '🤕', escape: '🧪', story: '📖', buy: '🛒', deliver: '📦', refuse: '💬',
   arrive: '👋', leave: '🚪', level: '⭐', banter: '🍺', craft: '🔨', bounty: '📋', build: '🏗️', info: '📜',
-  event: '📯', order: '🧾', goal: '🎯', broken: '💥',
+  event: '📯', order: '🧾', goal: '🎯', broken: '💥', social: '👥', herogoal: '🎉', party: '🤝',
 };
 
 const TABS = [
@@ -212,21 +213,18 @@ export class UI {
       .filter((id) => RECIPES[id].slot !== 'event'));
     const rows = [...ids].map((id) => {
       const r = RECIPES[id];
-      const lvl = s.prices[id] ?? 1;
       const n = groups[id] ?? 0;
       const fair = fairPrice(id);
-      const btns = PRICE_LEVELS.map((p, i) => `<button data-act="price" data-id="${id}" data-l="${i}" class="${i === lvl ? 'active' : ''}">
-        ${p.name}<small>${Math.round(fair * p.mult)}</small></button>`).join('');
       const interest = this.interestHtml(s, id);
       return `<div class="card"><div class="row"><b>${r.name}</b> <span class="tier">${'★'.repeat(r.tier)}</span>
         <span class="small ok">${r.slot === 'potion' ? 'Notfall-Trank' : `+${gearPower(id)} Kraft`}</span>
         <span>${n ? `${n}× im Regal` : '<span class="dim">in Arbeit</span>'}</span></div>
-        <div class="seg prices">${btns}</div>${interest}
+        <div class="small">Preis: <b class="gold-txt">${fair} 🪙</b></div>${interest}
         ${n ? `<button class="link" data-act="sell" data-id="${id}">1 Stück an Händler verkaufen (${Math.floor(fair * 0.5)} 🪙)</button>` : ''}</div>`;
     }).join('');
     return `<section><h2>Regal <span class="dim small">${s.shelf.length}/${cap}</span></h2>
-      <p class="small dim">Helden kaufen selbst, wenn ihnen Ware und Preis passen. Geizige Helden zahlen höchstens „Fair“,
-      spendable auch mal Wucher – und Wucher drückt die Laune.</p>
+      <p class="small dim">Helden kaufen selbst, sobald sie das nötige Gold haben. Geizige wollen danach noch einen
+      Notgroschen übrig haben. 🌟 = genau das wünscht sich jemand.</p>
       ${rows || '<p class="dim">Das Regal ist leer. Ab in die Werkstatt!</p>'}</section>
       <section><h2>Einnahmen</h2><div class="small">Verkauft: ${s.stats.sold} Waren · Reparaturen: ${s.stats.repairs ?? 0} 🪙 · gesamt ${s.stats.earned} 🪙</div></section>`;
   }
@@ -283,7 +281,7 @@ export class UI {
     }
     const fans = s.heroes.filter((h) => h.cls === r.cls && (h[r.slot] ? RECIPES[h[r.slot]].tier : 0) < r.tier);
     return fans.length
-      ? `<div class="small interest">Interesse: ${fans.map((h) => `<span class="${h.gold >= price ? 'ok' : 'dim'}">${esc(h.name.split(' ')[0])} (${Math.floor(h.gold)} 🪙, Kraft ${heroPower(h)}→${powerWith(h, id)})</span>`).join(', ')}</div>`
+      ? `<div class="small interest">Interesse: ${fans.map((h) => `<span class="${canAfford(h, price) ? 'ok' : 'dim'}">${wantsRecipe(h, id) ? '🌟' : ''}${esc(h.name.split(' ')[0])} (${Math.floor(h.gold)} 🪙, Kraft ${heroPower(h)}→${powerWith(h, id)})</span>`).join(', ')}</div>`
       : '<div class="small dim interest">Gerade braucht das niemand.</div>';
   }
 
@@ -333,6 +331,7 @@ export class UI {
       <div class="hinfo"><div class="row"><b>${esc(h.name)}</b><span>${moodIcon(h.mood)} ${Math.floor(h.gold)} 🪙</span></div>
         <div class="small">${className(h.cls, h.female)} · Stufe ${h.level} · Kraft ${heroPower(h)}</div>
         <div class="small dim">${heroState(s, h)}</div>
+        ${this.goalLine(s, h)}${this.relationLine(s, h)}
         <div class="thought">„${esc(h.thought)}“</div></div></div>`).join('');
     const free = cap - s.heroes.length;
     const hours = Math.max(1, Math.round(1 / arrivalChance(s)));
@@ -340,6 +339,20 @@ export class UI {
       ? `<p class="small dim">🛏️ ${free} ${free === 1 ? 'Zimmer' : 'Zimmer'} frei. ${s.guestDue !== null ? 'Es hat sich herumgesprochen – bald kommt jemand.' : `Neue Helden kommen tagsüber, bei deinem Ruf (${s.reputation}) etwa alle ${hours} Std.`}</p>`
       : '<p class="small dim">🛏️ Die Taverne ist voll. Für mehr Helden die Taverne ausbauen.</p>';
     return `<section><h2>Helden <span class="dim small">${s.heroes.length}/${cap}</span></h2>${info}${cards}</section>`;
+  }
+
+  goalLine(s, h) {
+    const p = goalProgress(s, h);
+    if (!p) return '';
+    const unit = p.unit ? ` ${p.unit}` : '';
+    const prog = p.max > 1 ? ` <span class="dim">(${p.cur}${p.unit === '% Chance' ? '' : `/${p.max}`}${unit})</span>` : '';
+    return `<div class="small wish">🌟 Wunsch: ${esc(p.text)}${prog}</div>`;
+  }
+
+  relationLine(s, h) {
+    const f = friendsOf(s, h).map((o) => `💛 ${esc(o.name.split(' ')[0])}`);
+    const r = rivalsOf(s, h).map((o) => `⚔️ ${esc(o.name.split(' ')[0])}`);
+    return f.length || r.length ? `<div class="small">${[...f, ...r].join(' · ')}</div>` : '';
   }
 
   paintMinis() {
@@ -421,6 +434,9 @@ export class UI {
         <h3>Wesen</h3>
         ${h.traits.map((t) => `<div class="small"><b>${TRAITS[t].name}</b> – ${TRAITS[t].desc}</div>`).join('')}
         <div class="small">Liebt: ${AREAS[h.fav].icon} ${AREAS[h.fav].name}${h.hated ? ` · Hasst: ${AREAS[h.hated].icon} ${AREAS[h.hated].name}` : ''}</div>
+        <h3>Wunsch</h3>${this.goalLine(s, h) || '<p class="small dim">Gerade wunschlos glücklich.</p>'}
+        ${h.goalsDone ? `<div class="small dim">Schon ${h.goalsDone}× einen Traum erfüllt.</div>` : ''}
+        <h3>Beziehungen</h3>${this.relationsHtml(s, h)}
         <h3>Einschätzung der Gebiete</h3>${areas}
         <h3>Zuletzt</h3>${recent || '<p class="dim small">–</p>'}`;
     };
@@ -443,6 +459,16 @@ export class UI {
     };
   }
 
+  relationsHtml(s, h) {
+    const others = s.heroes.filter((o) => o !== h)
+      .map((o) => ({ o, v: relation(s, h, o) }))
+      .filter((x) => Math.abs(x.v) >= 15)
+      .sort((a, b) => b.v - a.v);
+    if (!others.length) return '<p class="small dim">Kennt die anderen noch kaum.</p>';
+    const label = (v) => (v >= 40 ? '💛 Freund' : v >= 15 ? '🙂 versteht sich gut' : v <= -40 ? '⚔️ Rivale' : '😒 kann ihn nicht leiden');
+    return others.map(({ o, v }) => `<div class="row small"><span>${esc(o.name)}</span><span>${label(v).replace('ihn', o.female ? 'sie' : 'ihn')}</span></div>`).join('');
+  }
+
   showReport(before, minutes, info) {
     const s = this.s;
     const entries = s.log.filter((e) => e.t > before.t).reverse();
@@ -456,11 +482,47 @@ export class UI {
       <p class="small dim">${fmtDuration(minutes)} Spielzeit vergangen${info.capped ? ` (begrenzt durch das Lagerhaus)` : ''}.</p>
       <div class="stats"><div><b>${goldDiff >= 0 ? '+' : ''}${goldDiff}</b>🪙 Gold</div><div><b>${sold}</b>verkauft</div>
       <div><b>${succ}/${adv}</b>Abenteuer</div></div>
+      ${this.summaryHtml(s, before, entries)}
       ${s.event ? `<button class="event-btn" data-act="event">${EVENT_BY_ID[s.event.id].icon} <b>${EVENT_BY_ID[s.event.id].title}</b><span>Entscheidung nötig ›</span></button>` : ''}
       ${s.orders.some((o) => o.state === 'offered') ? `<button class="event-btn order" data-act="tab" data-id="auftraege">🧾 <b>Bestellanfrage wartet</b><span>Ansehen ›</span></button>` : ''}
-      ${list || '<p class="dim">Ruhige Zeiten in Eichenfurt.</p>'}
+      ${list ? `<h3>Alles der Reihe nach</h3>${list}` : '<p class="dim">Ruhige Zeiten in Eichenfurt.</p>'}
       ${entries.length > 80 ? `<p class="small dim">… und ${entries.length - 80} weitere Einträge in der Chronik.</p>` : ''}
       <button class="wide" data-act="close">Weiter</button>`);
+  }
+
+  // „Das Wichtigste“ oben im Bericht: was passiert ist und was jetzt Aufmerksamkeit braucht
+  summaryHtml(s, before, entries) {
+    const nameOf = (e) => (e.text.match(/\*\*(.+?)\*\*/) ?? [])[1] ?? '?';
+    const first = (n) => n.split(' ')[0];
+    const heroName = (id) => s.heroes.find((h) => h.id === id)?.name;
+    const of = (kind, pred = () => true) => entries.filter((e) => e.kind === kind && pred(e)).reverse();
+    const lines = [];
+    const add = (icon, label, items) => { if (items.length) lines.push(`<li><span>${icon}</span><span><b>${label}:</b> ${items.join(', ')}</span></li>`); };
+
+    add('🌟', 'Traum erfüllt', of('herogoal').map((e) => esc(first(nameOf(e)))));
+    add('💛', 'Neue Freundschaft', of('social', (e) => e.data?.kind === 'friend').map((e) => esc(`${first(nameOf(e))} & ${first(heroName(e.data.other) ?? '?')}`)));
+    add('⚔️', 'Neue Rivalität', of('social', (e) => e.data?.kind === 'rival').map((e) => esc(`${first(nameOf(e))} & ${first(heroName(e.data.other) ?? '?')}`)));
+    add('⭐', 'Aufgestiegen', of('level').map((e) => esc(`${first(nameOf(e))} (St. ${e.data?.level ?? '?'})`)));
+    const deliveries = of('deliver');
+    if (deliveries.length) add('📦', 'Kopfgelder', [`${deliveries.length} ${deliveries.length === 1 ? 'Lieferung' : 'Lieferungen'}`]);
+    add('🧾', 'Bestellung erledigt', of('order', (e) => e.data?.done).map((e) => esc(nameOf(e))));
+    add('⏰', 'Bestellung verpasst', of('order', (e) => e.data?.failed).map((e) => esc(nameOf(e))));
+    add('💥', 'Zerbrochen', of('broken').map((e) => esc(`${e.data?.item ?? 'Ausrüstung'} (${first(nameOf(e))})`)));
+    add('👋', 'Neu im Dorf', of('arrive').map((e) => esc(first(nameOf(e)))));
+    add('🚪', 'Abgereist', of('leave').map((e) => esc(first(nameOf(e)))));
+    const crafted = s.stats.crafted - (before.crafted ?? s.stats.crafted);
+    if (crafted > 0) add('🔨', 'Hergestellt', [`${crafted} ${crafted === 1 ? 'Stück' : 'Stück'}`]);
+
+    // Zustand jetzt
+    const injured = s.heroes.filter((h) => h.state === 'injured');
+    add('🤕', 'Verletzt', injured.map((h) => esc(`${first(h.name)} (noch ${fmtDuration(h.until - s.t)})`)));
+    const idle = s.slots.every((j) => !j) && !s.queue.length;
+    const hints = [];
+    if (idle) hints.push('Die Werkstatt steht still');
+    if (!s.shelf.length) hints.push('Das Regal ist leer');
+    if (hints.length) lines.push(`<li class="hint"><span>⚠️</span><span>${hints.join(' · ')}</span></li>`);
+
+    return lines.length ? `<h3>Das Wichtigste</h3><ul class="summary">${lines.join('')}</ul>` : '';
   }
 
   showEvent() {
@@ -547,7 +609,6 @@ export class UI {
       case 'decline': declineOrder(s, Number(id)); break;
       case 'fill': fillOrderFromShelf(s, Number(id)); break;
       case 'project': if (buildProject(s, id)) this.toast(`${PROJECTS[id].name} errichtet!`); break;
-      case 'price': s.prices[id] = Number(el.dataset.l); break;
       case 'sell': {
         const idx = s.shelf.findIndex((x) => x.recipe === id);
         if (idx >= 0) sellFromShelf(s, idx);

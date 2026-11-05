@@ -208,19 +208,58 @@ export const T = {
     '{n} packt die Sachen und verlässt Eichenfurt – schlecht gelaunt.',
     '{n} ist fort. Auf dem Kopfkissen liegt ein Zettel: „Nie wieder.“',
   ],
-  banter: [
-    '{n} und {o} streiten in der Taverne, wer den größeren Wolf erlegt hat.',
-    '{n} fordert {o} zum Armdrücken heraus. Der Wirt nimmt Wetten an.',
-    '{n} erzählt {o} eine Geschichte über den Drachen. {o} glaubt kein Wort.',
+  // Tavernengeplauder: freundlich stärkt Freundschaften, gereizt schürt Rivalitäten
+  banterFriendly: [
     '{n} und {o} singen ein Lied. Schief, aber laut.',
     '{n} leiht {o} ein paar Goldstücke. Ob {er} die wiedersieht?',
     '{n} und {o} vergleichen ihre Narben.',
-    '{n} verliert beim Würfeln gegen {o} und behauptet, die Würfel seien gezinkt.',
     '{n} und {o} planen einen gemeinsamen Ausflug. Nach dem dritten Bier wird der Plan sehr ehrgeizig.',
     '{n} bringt {o} einen neuen Trick mit der Waffe bei.',
+    '{n} erzählt {o} eine Geschichte über den Drachen. {o} hört mit großen Augen zu.',
+    '{n} schwärmt {o} von deinem Laden vor.',
+    '{n} und {o} spielen bis spät in die Nacht Karten. Keiner gewinnt, beide lachen.',
+    '{n} flickt {o} den Umhang. „Du würdest ja sonst erfrieren.“',
+    '{n} und {o} stoßen auf die alten Zeiten an. Welche alten Zeiten, weiß keiner so genau.',
+  ],
+  banterRival: [
+    '{n} und {o} streiten in der Taverne, wer den größeren Wolf erlegt hat.',
+    '{n} fordert {o} zum Armdrücken heraus. Der Wirt nimmt Wetten an.',
+    '{n} verliert beim Würfeln gegen {o} und behauptet, die Würfel seien gezinkt.',
     '{n} schnarcht. {o} wirft einen Stiefel.',
     '{n} und {o} wetten, wer zuerst den Drachen besiegt.',
-    '{n} schwärmt {o} von deinem Laden vor.',
+    '{n} macht sich über die Ausrüstung von {o} lustig. Der Wirt muss dazwischengehen.',
+    '{o} hat {n} den letzten Platz am Kamin weggeschnappt. Das wird {n} nicht vergessen.',
+    '„Dein Glück, dass ich heute müde bin“, knurrt {n} in Richtung {o}.',
+  ],
+  // Beziehungen
+  friendship: [
+    '💛 Aus {n} und {o} sind echte Freunde geworden.',
+    '💛 {n} und {o} sind jetzt unzertrennlich – man sieht sie nur noch zusammen in der Taverne.',
+  ],
+  rivalry: [
+    '⚔️ Zwischen {n} und {o} herrscht jetzt offene Rivalität.',
+    '⚔️ {n} und {o} können sich nicht mehr ausstehen. Jeder will besser sein als der andere.',
+  ],
+  friendLeft: ['{n} vermisst {o}. Die Taverne ist nicht mehr dieselbe.'],
+  // Gemeinsame Ausflüge von Freunden
+  partyDepart: [
+    '{n} und {o} ziehen gemeinsam {zu}. Allein hätte sich keiner getraut.',
+    '„Zusammen schaffen wir das!“ – {n} und {o} brechen {zu} auf.',
+    '{n} und {o} haben einen Plan. Er beginnt {in}.',
+  ],
+  partySuccess: [
+    'Gemeinsam schaffen es {n} und {o}: Sie kehren siegreich {aus} zurück.',
+    '{n} und {o} kommen Arm in Arm {aus} zurück. Der Kampf gegen {F} war für die beiden ein Spaziergang.',
+    'Seite an Seite haben {n} und {o} {in} gesiegt. Die Taverne feiert sie.',
+  ],
+  partyFail: [
+    '{n} und {o} kehren geschlagen {aus} zurück – aber wenigstens gemeinsam.',
+    'Der gemeinsame Ausflug von {n} und {o} {zu} ging schief. Beide müssen sich erholen.',
+  ],
+  // Persönliche Ziele
+  heroGoalDone: [
+    '🌟 {n} hat sich einen Traum erfüllt: {x}!',
+    '🌟 Ein großer Tag für {n}: {x}. {Er} strahlt über das ganze Gesicht.',
   ],
   craftDone: ['In der Schmiede ist {x} fertig geworden.'],
   shelfFull: ['{x} ist fertig, aber das Regal ist voll!'],
@@ -228,6 +267,16 @@ export const T = {
 
 // Gedanken (direkte Rede, ohne Namen)
 export const THOUGHTS = {
+  goal: {
+    gear: ['Eines Tages trage ich {x}.', 'Ich spare auf {x}.', 'Mit {x} wäre ich unschlagbar.'],
+    area: ['Irgendwann bezwinge ich {A}.', 'Eines Tages wage ich mich {zu}.'],
+    level: ['Stufe {x} – das ist mein Ziel.', 'Noch ein paar Abenteuer, dann bin ich Stufe {x}.'],
+    gold: ['{x} Gold zurücklegen, dann kauf ich mir ein Häuschen.', 'Jede Münze zählt. {x} Gold will ich zusammenhaben.'],
+    bounty: ['Ich will endlich mal ein Kopfgeld kassieren.', 'Wenn da ein Kopfgeld hängt, bin ich dabei.'],
+  },
+  rivalAhead: ['Pah! {o} hält sich für was Besseres. Das kann ich auch.', '{o} schon wieder. Dem zeig ich\'s.'],
+  friendHurt: ['Ich mach mir Sorgen um {o}.'],
+  competitor: ['Mal sehen, was der Händler am Markt so hat.'],
   night: ['Zzz …', 'Nachts zieht doch niemand los.', 'Morgen früh vielleicht.'],
   tooDangerous: [
     '{A}? Mit dieser Ausrüstung? Da bräuchte ich schon Besseres.',
