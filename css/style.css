@@ -236,3 +236,13 @@ textarea { width: 100%; margin-top: 8px; background: #15110d; color: var(--text)
   border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; }
 .summary li.hint { border-color: #8a6a30; color: #f2c98a; }
 .wish { color: #f2d68a; margin-top: 2px; }
+
+/* Bitten, Heldenbuch */
+.event-btn.request { background: linear-gradient(90deg, #3a2a4a, #2a2036); border-color: #c8a0e8; animation: none; }
+.event-btn.request b { color: #ead6ff; }
+.status { color: #d6c8ae; }
+.bio { border-left: 2px solid var(--line); margin: 6px 0 4px 8px; padding-left: 10px; }
+.bio-day { font-size: 12px; color: var(--accent); margin: 8px 0 2px -4px; }
+.bio-entry { display: grid; grid-template-columns: 22px 1fr; gap: 4px; font-size: 13px; padding: 2px 0; color: #d6c8ae; }
+.bio-entry.you { color: #f6e2b0; }
+.bio-entry.mark span:last-child::after { content: ' ✋'; font-size: 11px; }

@@ -3,6 +3,7 @@
 import { AREAS, RECIPES } from './data.js';
 import { T, THOUGHTS, fmt } from './text.js';
 import { log, say, changeMood, heroPower, successChance, evaluateAreas, priceOf } from './sim.js';
+import { bio, bump } from './life.js';
 
 export const FRIEND = 40;
 export const RIVAL = -40;
@@ -30,8 +31,16 @@ export function changeRelation(s, r, a, b, d) {
   s.relations[k] = v;
   if (old < FRIEND && v >= FRIEND) {
     log(s, 'social', fmt(say(s, r, 'friendship', T.friendship), a, { o: `**${b.name}**` }), a.id, { other: b.id, kind: 'friend' });
+    bio(s, a, '💛', `Wurde Freund von ${b.name}.`);
+    bio(s, b, '💛', `Wurde Freund von ${a.name}.`);
+    bump(a, 'friendships'); bump(b, 'friendships');
   } else if (old > RIVAL && v <= RIVAL) {
     log(s, 'social', fmt(say(s, r, 'rivalry', T.rivalry), a, { o: `**${b.name}**` }), a.id, { other: b.id, kind: 'rival' });
+    bio(s, a, '⚔️', `Wurde Rivale von ${b.name}.`);
+    bio(s, b, '⚔️', `Wurde Rivale von ${a.name}.`);
+  } else if (old >= FRIEND && v < FRIEND - 10) {
+    bio(s, a, '💔', `Die Freundschaft mit ${b.name} ist abgekühlt.`);
+    bio(s, b, '💔', `Die Freundschaft mit ${a.name} ist abgekühlt.`);
   }
 }
 
@@ -60,8 +69,12 @@ export function banter(s, r, a, b) {
 export function heroLeft(s, r, h) {
   for (const f of friendsOf(s, h)) {
     changeMood(f, -12);
+    bump(f, 'bitterness');
     log(s, 'social', fmt(say(s, r, 'friendLeft', T.friendLeft), f, { o: `**${h.name}**` }), f.id);
+    bio(s, f, '💔', `Verlor ${h.female ? 'die Freundin' : 'den Freund'} ${h.name} – ${h.female ? 'sie' : 'er'} hat Eichenfurt verlassen.`);
   }
+  for (const o of s.heroes) if (o.mentor === h.id) { o.mentor = null; bio(s, o, '🎓', `Verlor ${h.female ? 'die Lehrmeisterin' : 'den Lehrmeister'} ${h.name}.`); }
+  if (h.debt) log(s, 'loan', `💰 Mit **${h.name}** verschwinden auch ${h.debt.amount} Gold Vorschuss.`, h.id);
   for (const k of Object.keys(s.relations)) if (k.split('-').map(Number).includes(h.id)) delete s.relations[k];
 }
 
@@ -201,6 +214,9 @@ export function checkHeroGoal(s, r, h) {
   s.reputation += 3;
   h.goalsDone = (h.goalsDone ?? 0) + 1;
   log(s, 'herogoal', fmt(say(s, r, 'heroGoalDone', T.heroGoalDone), h, { x: p.text }), h.id);
+  // Hat deine Ware den Traum erfüllt?
+  bio(s, h, '🌟', `Traum erfüllt: ${p.text}.`, h.goal.type === 'gear');
+  bump(h, 'joy');
   h.goal = null;
   h.nextGoalAt = s.t + r.int(8 * 60, 16 * 60);
 }

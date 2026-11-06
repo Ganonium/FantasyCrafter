@@ -111,10 +111,16 @@ export const TRAITS = {
   geizig:      { name: 'Geizig',      desc: 'Kauft erst, wenn danach noch ein Notgroschen übrig bleibt.' },
   spendabel:   { name: 'Spendabel',   desc: 'Gönnt sich Heiltränke ohne lange zu überlegen.' },
   gesellig:    { name: 'Gesellig',    desc: 'Mag die Taverne und andere Helden.' },
+  // Diese Wesenszüge bringt niemand mit – sie entstehen durch Erlebnisse (Wesenswandel)
+  abgehaertet: { name: 'Abgehärtet',  desc: 'Hat schon viel eingesteckt: heilt schneller und lässt sich von Niederlagen kaum entmutigen.', acquired: true },
+  uebermuetig: { name: 'Übermütig',   desc: 'Zu viele Siege am Stück: unterschätzt jede Gefahr und verzichtet auf Heiltränke.', acquired: true },
+  verbittert:  { name: 'Verbittert',  desc: 'Vom Leben enttäuscht: schlechter gelaunt, streitlustiger, weniger Tatendrang.', acquired: true },
+  zufrieden:   { name: 'Zufrieden',   desc: 'Hat sich Träume erfüllt: kaum noch schlecht gelaunt, aber auch nicht mehr so hungrig.', acquired: true },
 };
 
 export const TRAIT_CONFLICTS = [
   ['mutig', 'vorsichtig'], ['faul', 'eifrig'], ['geizig', 'spendabel'], ['vorsichtig', 'ruhmsuechtig'],
+  ['uebermuetig', 'vorsichtig'], ['verbittert', 'zufrieden'], ['verbittert', 'gesellig'], ['zufrieden', 'eifrig'],
 ];
 
 export const BUILDINGS = {
