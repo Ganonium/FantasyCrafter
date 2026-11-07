@@ -16,3 +16,5 @@ den Drachen wagen. Details stehen in [KONZEPT.md](KONZEPT.md).
 - Kein Build-Schritt: `index.html`, `css/`, `src/`.
 - `src/sim.js` enthält die komplette Spiellogik (ohne DOM), `src/data.js` die Spieldaten, `src/text.js` die Erzähltexte.
 - Balancing-Test ohne Browser: `node tools/simulate.mjs 14 42` (Tage, Seed, optional `--log`).
+- Neue Version veröffentlichen: `version.json` hochzählen. Die installierte App bemerkt die Änderung beim Zurückkehren
+  (oder alle 30 Minuten) und zeigt „Neue Version verfügbar – neu laden“.

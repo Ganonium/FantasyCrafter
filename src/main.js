@@ -122,11 +122,26 @@ function frame(now) {
 }
 requestAnimationFrame(frame);
 
+// Neue Version? Die installierte App bleibt im Hintergrund oft tagelang geöffnet und lädt nie neu.
+// version.json wird bei jeder Veröffentlichung hochgezählt; weicht sie ab, bietet die App das Neuladen an.
+let loadedVersion = null;
+async function checkVersion() {
+  try {
+    const res = await fetch('version.json', { cache: 'no-store' });
+    const { version } = await res.json();
+    if (loadedVersion === null) loadedVersion = version;
+    else if (version !== loadedVersion) ui.showUpdate();
+  } catch { /* offline – später erneut */ }
+}
+checkVersion();
+setInterval(checkVersion, 30 * 60 * 1000);
+
 // Beim Zurückkehren sofort nachrechnen, nicht erst beim nächsten Bild
 function resume() {
   if (document.hidden) return;
   tick();
   ui.render();
+  checkVersion();
 }
 document.addEventListener('visibilitychange', resume);
 window.addEventListener('pageshow', resume);
@@ -137,5 +152,5 @@ document.addEventListener('visibilitychange', () => { if (document.hidden) game.
 window.addEventListener('pagehide', () => game.save());
 
 if ('serviceWorker' in navigator && location.protocol === 'https:') {
-  navigator.serviceWorker.register('./sw.js').catch(() => {});
+  navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' }).catch(() => {});
 }

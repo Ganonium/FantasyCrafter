@@ -246,3 +246,5 @@ textarea { width: 100%; margin-top: 8px; background: #15110d; color: var(--text)
 .bio-entry { display: grid; grid-template-columns: 22px 1fr; gap: 4px; font-size: 13px; padding: 2px 0; color: #d6c8ae; }
 .bio-entry.you { color: #f6e2b0; }
 .bio-entry.mark span:last-child::after { content: ' ✋'; font-size: 11px; }
+.event-btn.update { background: linear-gradient(90deg, #24442e, #1c3424); border-color: #8fc46a; animation: none; }
+.event-btn.update b { color: #d4f2c0; }
