@@ -83,10 +83,47 @@ bezwingen, der Geizige Gold ansparen, der Vorsichtige wünscht sich eine bestimm
 Entscheidungen (z. B. lockt das Wunsch-Gebiet). Erfüllt er sich, ist der Held überglücklich (🌟 in der Chronik).
 In Werkstatt und Laden steht 🌟 an Helden, die sich genau dieses Teil wünschen – so kannst du gezielt Träume erfüllen.
 
+## Persönliche Bitten
+
+Etwa alle 4–8 Stunden kommt tagsüber ein Held mit einer Bitte an deinen Tresen (🙋 im Banner). Er wartet 5 Stunden,
+danach gilt die letzte Antwort. Deine Antwort hat Folgen, oft erst später sichtbar:
+
+| Bitte | Antworten und Folgen |
+|---|---|
+| 🗣️ Ein Rat unter vier Augen („Soll ich mich an die Trollbrücke wagen?“) | **Ermutigen**: Er traut sich (fast) alles zu. Siegt er, wächst sein Mut (aus Vorsicht wird Mut), scheitert er, gibt er dir die Schuld (zweimal → verbittert). **Abraten**: Er meidet das Gebiet einen Tag; Abenteuerlustige sind enttäuscht. |
+| 💰 Vorschuss für ein Teil aus deinem Regal | **Vorstrecken**: Er kauft sofort und zahlt zurück, sobald er kann – oder bleibt es schuldig. **Ablehnen**: Enttäuschung. |
+| 💢 Streit zweier Rivalen im Laden | **Schlichten** (eine Runde ausgeben): Sie kommen sich näher. **Anheizen**: 12 Std. Wettstreit, beide gehen mehr Risiko ein. **Raushalten**. |
+| 🎓 Eine Lehre vermitteln (Junger Held ↔ Veteran) | **Vermitteln** (Lehrgeld): Der Lehrling lernt 60 % schneller und übernimmt beim Auslernen vielleicht einen Wesenszug des Lehrmeisters. |
+
+## Wesenswandel
+
+Wesenszüge sind nicht fest. Erlebnisse – und deine Entscheidungen – verändern sie (🌱 in Chronik und Heldenbuch):
+
+| Auslöser | Wandel |
+|---|---|
+| drei schwere Niederlagen ohne Heiltrank (Siege lassen sie verblassen) | wird **vorsichtig** |
+| dein Zuspruch hat sich ausgezahlt (bei Vorsichtigen schon einmal) | wird **mutig** |
+| fünf Verletzungen | wird **abgehärtet**: heilt schneller, Niederlagen drücken die Laune weniger |
+| acht echte Siege in Folge | wird **übermütig**: unterschätzt Gefahren, kauft keine Heiltränke – bis zur ersten schweren Niederlage |
+| dein Rat führte zweimal ins Unglück, oder Enttäuschungen (Freund verloren) | wird **verbittert**: schlechter gelaunt, streitlustiger – heilbar durch erfüllte Träume und gute Erfahrungen |
+| drei erfüllte Träume (nach ein paar Tagen im Dorf) | wird **zufrieden**: kaum noch schlecht gelaunt, aber weniger Tatendrang |
+| zwei echte Freundschaften | wird **gesellig** |
+| Auslernen beim Lehrmeister | übernimmt vielleicht einen Wesenszug des Lehrmeisters |
+
+Widersprüchliche Züge fallen weg; ein Held hat höchstens drei.
+
+## Heldenbuch
+
+Jeder Held hat eine Lebensgeschichte (📖 auf der Heldenkarte, neueste Kapitel zuerst, nach Tagen gegliedert):
+Ankunft, Käufe bei dir, erste Siege je Gebiet, Stufen, schwere Verletzungen, Rettung durch deinen Heiltrank,
+zerbrochene Ausrüstung, erste Kopfgelder, Freundschaften und Rivalitäten, gemeinsame Wagnisse, erfüllte Träume,
+Wesenswandel, Lehre, Vorschüsse und deine Ratschläge. Alles, wobei du deine Hand im Spiel hattest, ist mit ✋
+markiert – oben steht, wie viele Kapitel du mitgeschrieben hast.
+
 ## Bericht beim Öffnen
 
 Oben steht „Das Wichtigste“: erfüllte Träume, neue Freundschaften und Rivalitäten, Aufstiege, Kopfgeld-Lieferungen,
-erledigte oder verpasste Bestellungen, zerbrochene Ausrüstung, Neuankömmlinge und Abreisen, wer gerade verletzt ist –
+erledigte oder verpasste Bestellungen, Wesenswandel, die Folgen deiner Ratschläge, zurückgezahlte Vorschüsse, zerbrochene Ausrüstung, Neuankömmlinge und Abreisen, wer gerade verletzt ist –
 und Hinweise, wenn die Werkstatt stillsteht oder das Regal leer ist. Darunter folgt alles der Reihe nach.
 
 ## Ereignisse

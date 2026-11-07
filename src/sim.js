@@ -12,6 +12,8 @@ import { GOALS, PROJECTS } from './goals.js';
 import {
   banter, changeRelation, friendsOf, rivalsOf, heroLeft, findParty, checkHeroGoal, goalAreaBonus, goalDrive, goalThought,
 } from './social.js';
+import { bio, bump, life, checkGrowth, growTrait, traitThreshold, traitDrive, moodBaseline } from './life.js';
+import { processRequests } from './requests.js';
 
 export const SAVE_VERSION = 2;
 const LOG_LIMIT = 500;
@@ -69,6 +71,8 @@ function addV2Fields(s) {
   s.clockOffset ??= 0;
   s.guestDue ??= null;
   s.relations ??= {};
+  s.request ??= null;
+  s.nextRequest ??= s.t + 240;
 }
 
 export function migrate(s) {
@@ -230,7 +234,7 @@ function addHero(s, r, { cls, silent = false, level = 1 } = {}) {
   const name = r.chance(0.35) && epithets.length ? `${first} ${r.pick(epithets)}` : first;
   cls ??= r.pick(['krieger', 'waldlaeufer', 'magier']);
 
-  const traitIds = Object.keys(TRAITS);
+  const traitIds = Object.keys(TRAITS).filter((t) => !TRAITS[t].acquired);
   const t1 = r.pick(traitIds);
   let t2;
   do { t2 = r.pick(traitIds); } while (t2 === t1 || TRAIT_CONFLICTS.some(([a, b]) => (a === t1 && b === t2) || (a === t2 && b === t1)));
@@ -263,6 +267,7 @@ function addHero(s, r, { cls, silent = false, level = 1 } = {}) {
     for (const [id, rc] of own) if (r.chance(0.6)) h[rc.slot] = id;
   }
   s.heroes.push(h);
+  bio(s, h, '👋', `Kam als ${className(cls, female)} (Stufe ${level}) nach Eichenfurt.`);
   if (!silent) log(s, 'arrive', fmt(say(s, r, 'arrive', T.arrive), h), h.id);
   return h;
 }
@@ -308,12 +313,17 @@ export function evaluateAreas(s, h, { power = heroPower(h) } = {}) {
     if (h.gold < 40) threshold -= 0.12;
     // Ein stärkerer Rivale stachelt an; Turnierruhm macht mutig; persönliche Ziele locken
     if (rivalAhead) threshold -= 0.06;
+    if ((h.challengeUntil ?? 0) > s.t) threshold -= 0.12;
     threshold -= effectVal(s, 'courage');
     const goal = goalAreaBonus(h, id);
     threshold += goal.threshold;
-    threshold = Math.max(0.2, Math.min(0.9, threshold));
+    threshold = traitThreshold(h, Math.max(0.2, Math.min(0.9, threshold)));
+    // Dein Rat: Ermutigt traut sich der Held (fast) alles zu, abgeraten meidet er das Gebiet
+    const advice = h.advice && h.advice.until > s.t && h.advice.area === id ? h.advice.type : null;
+    if (advice === 'encouraged') threshold = Math.min(threshold, Math.max(0.15, p - 0.01));
 
     let value = p * (avgGold + bountyValue * greed) * goal.value;
+    if (advice === 'encouraged') value *= 3;
     if (h.fav === id) value *= 1.4;
     if (has(h, 'ruhmsuechtig')) value *= 1 + a.danger / 50;
     // Unterforderung: Wer viel zu stark ist, hat wenig Lust auf Kleinkram
@@ -322,6 +332,7 @@ export function evaluateAreas(s, h, { power = heroPower(h) } = {}) {
 
     let block = null;
     if (h.hated === id) block = 'hated';
+    else if (advice === 'discouraged') block = 'advice';
     else if (p < threshold) block = 'danger';
     res.push({ id, p, value, threshold, bountyValue, block });
   }
@@ -356,14 +367,7 @@ function tryShopping(s, r, h) {
       const price = priceOf(s, it.recipe);
       if (!canAfford(h, price)) { refusal ??= fmt(THOUGHTS.wantItem[0], h, { x: it.rc.name, p: price }); continue; }
 
-      sellToHero(s, h, it.recipe, price, it.idx);
-      s.reputation += it.rc.tier;
-      h[slot] = it.recipe;
-      changeMood(h, 8);
-      log(s, 'buy', fmt(say(s, r, 'buy.' + slot, T.buy[slot]), h, { x: `**${it.rc.name}**` }) + ` (+${price} 🪙)`, h.id);
-      setThought(h, `${it.rc.name}! Das muss ich gleich ausprobieren.`);
-      // Der Rivale sieht das gar nicht gern
-      for (const o of rivalsOf(s, h)) setThought(o, fmt(r.pick(THOUGHTS.rivalAhead), o, { o: h.name }));
+      purchase(s, r, h, it.recipe, it.idx);
       bought = true;
       refusal = null;
       break;
@@ -374,8 +378,32 @@ function tryShopping(s, r, h) {
   return bought;
 }
 
+function purchase(s, r, h, recipe, idx) {
+  const rc = RECIPES[recipe];
+  const price = priceOf(s, recipe);
+  sellToHero(s, h, recipe, price, idx);
+  s.reputation += rc.tier;
+  h[rc.slot] = recipe;
+  changeMood(h, 8);
+  log(s, 'buy', fmt(say(s, r, 'buy.' + rc.slot, T.buy[rc.slot]), h, { x: `**${rc.name}**` }) + ` (+${price} 🪙)`, h.id);
+  bio(s, h, '🛒', `Kaufte ${rc.name} bei dir.`, true);
+  setThought(h, `${rc.name}! Das muss ich gleich ausprobieren.`);
+  // Der Rivale sieht das gar nicht gern
+  for (const o of rivalsOf(s, h)) setThought(o, fmt(r.pick(THOUGHTS.rivalAhead), o, { o: h.name }));
+}
+
+// Für Bitten (Vorschuss): genau dieses Teil kaufen, falls es noch im Regal liegt
+export function buyItem(s, r, h, recipe) {
+  const idx = s.shelf.findIndex((it) => it.recipe === recipe);
+  if (idx < 0 || h.gold < priceOf(s, recipe)) return false;
+  purchase(s, r, h, recipe, idx);
+  checkHeroGoal(s, r, h);
+  return true;
+}
+
 function buyPotion(s, r, h) {
-  if (h.potions > 0) return;
+  // Übermütige glauben, keinen Heiltrank zu brauchen
+  if (h.potions > 0 || has(h, 'uebermuetig')) return;
   const idx = s.shelf.findIndex((it) => it.recipe === 'heiltrank');
   if (idx < 0) return;
   const price = priceOf(s, 'heiltrank');
@@ -420,7 +448,9 @@ function think(s, r, h) {
   if (h.gold > 400 + h.level * 60) goChance -= 0.2;
   if (best && best.bountyValue > 0) goChance += 0.15 * (has(h, 'gierig') ? 2 : 1);
   if (best && effectVal(s, 'gold', { area: best.id }) > 1.5) goChance += 0.2;
-  goChance += goalDrive(s, h);
+  goChance += goalDrive(s, h) + traitDrive(h);
+  if ((h.challengeUntil ?? 0) > s.t) goChance += 0.15;
+  if (best && h.advice?.type === 'encouraged' && h.advice.area === best.id) goChance += 0.3;
   goChance = Math.max(0.05, Math.min(0.95, goChance));
 
   // Mit einem Freund trauen sich Helden mehr zu – und haben öfter Lust
@@ -474,6 +504,9 @@ function sendAway(s, r, h, ev, until) {
   h.until = until;
   h.bountyTrip = ev.bountyValue > 0;
   h.chance = ev.p;
+  // Folgt der Held deinem Zuspruch? Dann wird das Ergebnis dir zugeschrieben
+  h.advisedTrip = h.advice?.type === 'encouraged' && h.advice.area === ev.id && h.advice.until > s.t;
+  if (h.advisedTrip) h.advice = null;
 }
 
 function tripDuration(s, r, areaId) {
@@ -489,7 +522,11 @@ function departParty(s, r, h, f, ev, bold) {
   f.partyWith = h.id;
   h.partyBold = f.partyBold = bold || h.bountyTrip;
   const v = areaVars(ev.id);
-  if (h.partyBold) log(s, 'party', fmt(say(s, r, 'partyDepart', T.partyDepart), h, { ...v, o: `**${f.name}**` }), h.id, { other: f.id });
+  if (h.partyBold) {
+    log(s, 'party', fmt(say(s, r, 'partyDepart', T.partyDepart), h, { ...v, o: `**${f.name}**` }), h.id, { other: f.id });
+    bio(s, h, '🤝', `Wagte sich gemeinsam mit ${f.name} ${AREAS[ev.id].zu}.`);
+    bio(s, f, '🤝', `Wagte sich gemeinsam mit ${h.name} ${AREAS[ev.id].zu}.`);
+  }
   setThought(h, fmt('Zusammen mit {o} {zu}!', h, { ...v, o: f.name }));
   setThought(f, fmt('Zusammen mit {o} {zu}!', f, { ...v, o: h.name }));
 }
@@ -522,6 +559,11 @@ function deliverBounty(s, r, h, mat, count) {
   if (delivered > 0) {
     h.gold += paid;
     h.bountiesDone = (h.bountiesDone ?? 0) + 1;
+    h.bountyMats ??= [];
+    if (!h.bountyMats.includes(mat)) {
+      h.bountyMats.push(mat);
+      bio(s, h, '📦', `Kassierte zum ersten Mal dein Kopfgeld auf ${MATERIALS[mat].name}.`, true);
+    }
     s.reputation += 2 * delivered;
     s.stats.delivered[mat] = (s.stats.delivered[mat] ?? 0) + delivered;
     changeMood(h, 5);
@@ -572,6 +614,11 @@ function returnHome(s, r, h, opts = {}) {
     s.stats.areaWins[h.area] = (s.stats.areaWins[h.area] ?? 0) + 1;
     h.areaWins = h.areaWins ?? {};
     h.areaWins[h.area] = (h.areaWins[h.area] ?? 0) + 1;
+    if (h.areaWins[h.area] === 1) bio(s, h, '🏆', `Erster Sieg ${a.in}.`);
+    // Nur Siege, bei denen wirklich etwas auf dem Spiel stand, steigen zu Kopf
+    if (h.chance < 0.85) bump(h, 'winStreak');
+    // Siege lassen alte Niederlagen verblassen
+    life(h).heavyDefeats = Math.max(0, (life(h).heavyDefeats ?? 0) - 0.5);
     s.reputation += 1;
     changeMood(h, 8 + (h.fav === h.area ? 4 : 0));
     const tpl = roll > h.chance - 0.1 ? say(s, r, 'successClose', T.successClose) : say(s, r, 'success', T.success);
@@ -587,6 +634,8 @@ function returnHome(s, r, h, opts = {}) {
     xp = a.danger;
     pieces = a.mat && r.chance(0.4) ? 1 : 0;
     changeMood(h, -4);
+    life(h).winStreak = 0;
+    bio(s, h, '🧪', `Dein Heiltrank rettete ${h.female ? 'ihr' : 'ihm'} ${a.in} das Leben.`, true);
     if (!opts.quiet) log(s, 'escape', fmt(say(s, r, 'escape', T.escape), h, v), h.id);
     h.state = 'rest';
     h.until = s.t + Math.round((40 + a.time * 0.3) * effectVal(s, 'rest'));
@@ -594,7 +643,12 @@ function returnHome(s, r, h, opts = {}) {
     xp = Math.round(a.danger * 0.8);
     const lost = Math.round(h.gold * 0.15);
     h.gold -= lost;
-    changeMood(h, -14);
+    // Abgehärtete stecken Niederlagen besser weg
+    changeMood(h, has(h, 'abgehaertet') ? -7 : -14);
+    life(h).winStreak = 0;
+    bump(h, 'heavyDefeats');
+    bump(h, 'injuries');
+    bio(s, h, '🤕', `Kam schwer verletzt ${a.aus} zurück.`);
     if (!opts.quiet) log(s, 'fail', fmt(say(s, r, 'fail', T.fail), h, v) + (lost ? ` (${lost} 🪙 verloren)` : ''), h.id, { injured: true });
     // Freunde machen sich Sorgen
     for (const f of friendsOf(s, h)) { changeMood(f, -4); setThought(f, fmt(THOUGHTS.friendHurt[0], f, { o: h.name })); }
@@ -606,17 +660,39 @@ function returnHome(s, r, h, opts = {}) {
       h[slot] = null;
       changeMood(h, -6);
       log(s, 'broken', fmt(say(s, r, 'gearBroken', T.gearBroken), h, { ...v, x: `**${name}**` }), h.id, { item: name });
+      bio(s, h, '💥', `${name} zerbrach ${a.in}.`);
     }
     h.state = 'injured';
-    const base = (r.int(180, 360) + a.danger * 2) * effectVal(s, 'injury');
+    const base = (r.int(180, 360) + a.danger * 2) * effectVal(s, 'injury') * (has(h, 'abgehaertet') ? 0.6 : 1);
     h.until = s.t + Math.round(h.cls === 'krieger' ? base * 0.7 : base);
   }
+  // Folgen deines Rats: Der Held hat sich auf deinen Zuspruch hin hierher gewagt
+  if (h.advisedTrip) {
+    h.advisedTrip = false;
+    const ihm = h.female ? 'ihr' : 'ihm';
+    if (success) {
+      bump(h, 'goodAdvice'); bump(h, 'joy');
+      changeMood(h, 8);
+      log(s, 'advice', fmt(`🗣️ Weil du {ihm} Mut gemacht hast, wagte sich {n} {zu} – und siegte! „Danke für deinen Rat!“`, h, v), h.id, { good: true });
+      bio(s, h, '✋', `Wagte sich auf deinen Rat hin ${a.zu} – und siegte.`, true);
+    } else if (h.state !== 'injured') {
+      log(s, 'advice', fmt(`🗣️ Auf deinen Rat hin zog {n} {zu}. Es ging schief – nur ein Heiltrank rettete {ihn}.`, h, v), h.id);
+      bio(s, h, '✋', `Wagte sich auf deinen Rat hin ${a.zu} und musste fliehen.`, true);
+    } else {
+      bump(h, 'badAdvice');
+      log(s, 'advice', fmt(`🗣️ Auf deinen Rat hin zog {n} {zu} – und kam verwundet zurück. „Das hast du ja toll eingefädelt.“`, h, v), h.id, { bad: true });
+      bio(s, h, '✋', `Wagte sich auf deinen Rat hin ${a.zu} und kam schwer verletzt zurück. Das nimmt ${ihm} dir übel.`, true);
+    }
+  }
   h.gold += gold;
-  h.xp += xp;
+  // Lehrlinge lernen schneller, solange ihr Lehrmeister da ist
+  const mentor = h.mentor ? s.heroes.find((x) => x.id === h.mentor) : null;
+  h.xp += Math.round(xp * (mentor ? 1.6 : 1));
   while (h.xp >= xpNeeded(h.level)) {
     h.xp -= xpNeeded(h.level);
     h.level++;
     log(s, 'level', fmt(say(s, r, 'levelUp', T.levelUp), h, { x: h.level }), h.id, { level: h.level });
+    bio(s, h, '⭐', `Erreichte Stufe ${h.level}.`);
     for (const o of rivalsOf(s, h)) { changeMood(o, -3); setThought(o, fmt(r.pick(THOUGHTS.rivalAhead), o, { o: h.name })); }
   }
   if (pieces > 0) {
@@ -639,7 +715,45 @@ function returnHome(s, r, h, opts = {}) {
   h.area = null;
   h.bountyTrip = false;
   setThought(h, h.state === 'injured' ? r.pick(THOUGHTS.injured) : r.pick(THOUGHTS.resting));
+  if (mentor && h.level >= mentor.level - 1) graduate(s, r, h, mentor);
+  repayDebt(s, h);
   checkHeroGoal(s, r, h);
+  checkGrowth(s, r, h);
+}
+
+// Ein Lehrling hat ausgelernt – und nimmt vielleicht etwas vom Wesen des Lehrmeisters mit
+function graduate(s, r, h, mentor) {
+  h.mentor = null;
+  changeMood(h, 10); changeMood(mentor, 10);
+  log(s, 'growth', fmt('🎓 {n} hat bei {o} ausgelernt. Der Lehrmeister ist sichtlich stolz.', h, { o: `**${mentor.name}**` }), h.id, { graduated: mentor.id });
+  bio(s, h, '🎓', `Hat bei ${mentor.name} ausgelernt.`, true);
+  bio(s, mentor, '🎓', `${h.name} hat bei ${mentor.female ? 'ihr' : 'ihm'} ausgelernt.`, true);
+  const inherit = mentor.traits.filter((t) => !TRAITS[t].acquired && !h.traits.includes(t) &&
+    !TRAIT_CONFLICTS.some(([a, b]) => (a === t && h.traits.includes(b)) || (b === t && h.traits.includes(a))));
+  if (inherit.length && r.chance(0.6)) growTrait(s, r, h, r.pick(inherit), `ganz wie ${mentor.female ? 'die Lehrmeisterin' : 'der Lehrmeister'} ${mentor.name}`, true);
+}
+
+function repayDebt(s, h) {
+  if (!h.debt || h.gold < h.debt.amount + 10) return;
+  const late = s.t > h.debt.due;
+  h.gold -= h.debt.amount;
+  s.gold += h.debt.amount;
+  log(s, 'loan', fmt(late ? '💰 Spät, aber doch: {n} zahlt dir die {x} Gold Vorschuss zurück.' : '💰 {n} zahlt dir die {x} Gold Vorschuss zurück – mit einem dankbaren Nicken.', h, { x: h.debt.amount }), h.id);
+  bio(s, h, '💰', `Zahlte dir ${h.debt.amount} Gold Vorschuss zurück.`, true);
+  bump(h, 'joy');
+  h.debt = null;
+}
+
+// Fällige Schulden, die nicht bezahlt werden können
+function checkDebts(s, r) {
+  for (const h of s.heroes) {
+    if (!h.debt || s.t < h.debt.due + 24 * 60) continue;
+    if (h.gold >= h.debt.amount) { repayDebt(s, h); continue; }
+    log(s, 'loan', fmt('💰 {n} kann dir die {x} Gold Vorschuss nicht zurückzahlen und schämt sich. Die Schuld ist verloren.', h, { x: h.debt.amount }), h.id);
+    bio(s, h, '💰', `Blieb dir ${h.debt.amount} Gold schuldig.`, true);
+    changeMood(h, -6);
+    h.debt = null;
+  }
 }
 
 // ---------- Werkstatt ----------
@@ -916,7 +1030,12 @@ function eventApi(s, r) {
     addEffect: (e) => addEffect(s, e),
     removeEffect: (tag) => { s.effects = s.effects.filter((e) => e.tag !== tag); },
     moodAll: (d) => { for (const h of s.heroes) changeMood(h, d); },
-    addHero: (level) => (s.heroes.length < building(s, 'taverne').heroes ? addHero(s, r, { level, silent: true }) : null),
+    addHero: (level) => {
+      if (s.heroes.length >= building(s, 'taverne').heroes) return null;
+      const h = addHero(s, r, { level, silent: true });
+      bio(s, h, '✋', 'Lag verwundet am Wegesrand – du hast geholfen, und so blieb ' + (h.female ? 'sie' : 'er') + ' in Eichenfurt.', true);
+      return h;
+    },
   };
 }
 
@@ -1053,8 +1172,9 @@ function stepMinute(s, r) {
 
     // Laune pendelt langsam zur Mitte; gesellige Helden genießen die Taverne
     if (s.t % 60 === 0) {
-      if (h.mood < 50) changeMood(h, 1);
-      else if (h.mood > 65) changeMood(h, -1);
+      const [low, high] = moodBaseline(h);
+      if (h.mood < low) changeMood(h, 1);
+      else if (h.mood > high) changeMood(h, -1);
       if (h.state !== 'away') {
         if (has(h, 'gesellig')) changeMood(h, 1);
         changeMood(h, effectVal(s, 'moodHour'));
@@ -1099,6 +1219,8 @@ function stepMinute(s, r) {
 
   processOrders(s, r);
   processEvents(s, r);
+  processRequests(s, r);
+  if (s.t % 60 === 0) checkDebts(s, r);
   checkGoals(s);
   if (s.t % 60 === 0) s.effects = s.effects.filter((e) => e.until > s.t);
 }

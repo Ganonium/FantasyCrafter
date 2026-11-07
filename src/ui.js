@@ -11,6 +11,7 @@ import {
 } from './sim.js';
 import { EVENT_BY_ID } from './events.js';
 import { goalProgress, friendsOf, rivalsOf, wantsRecipe, relation } from './social.js';
+import { REQUESTS, requestOptions, resolveRequest } from './requests.js';
 import { GOALS, PROJECTS } from './goals.js';
 import { renderPortrait } from './sprites.js';
 
@@ -18,6 +19,7 @@ const KIND_ICON = {
   depart: '🚶', success: '✅', fail: '🤕', escape: '🧪', story: '📖', buy: '🛒', deliver: '📦', refuse: '💬',
   arrive: '👋', leave: '🚪', level: '⭐', banter: '🍺', craft: '🔨', bounty: '📋', build: '🏗️', info: '📜',
   event: '📯', order: '🧾', goal: '🎯', broken: '💥', social: '👥', herogoal: '🎉', party: '🤝',
+  request: '🙋', advice: '✋', growth: '✨', loan: '🤝',
 };
 
 const TABS = [
@@ -138,6 +140,10 @@ export class UI {
     if (s.event) {
       const def = EVENT_BY_ID[s.event.id];
       html += `<button class="event-btn" data-act="event">${def.icon} <b>${def.title}</b><span>Entscheiden ›</span></button>`;
+    }
+    if (s.request) {
+      const h = s.heroes.find((x) => x.id === s.request.data.hero);
+      if (h) html += `<button class="event-btn request" data-act="request">🙋 <b>${esc(h.name.split(' ')[0])} hat eine Bitte</b><span>Anhören ›</span></button>`;
     }
     const offered = s.orders.filter((o) => o.state === 'offered').length;
     if (offered) html += `<button class="event-btn order" data-act="tab" data-id="auftraege">🧾 <b>${offered === 1 ? 'Neue Bestellanfrage' : `${offered} Bestellanfragen`}</b><span>Ansehen ›</span></button>`;
@@ -331,7 +337,7 @@ export class UI {
       <div class="hinfo"><div class="row"><b>${esc(h.name)}</b><span>${moodIcon(h.mood)} ${Math.floor(h.gold)} 🪙</span></div>
         <div class="small">${className(h.cls, h.female)} · Stufe ${h.level} · Kraft ${heroPower(h)}</div>
         <div class="small dim">${heroState(s, h)}</div>
-        ${this.goalLine(s, h)}${this.relationLine(s, h)}
+        ${this.goalLine(s, h)}${this.relationLine(s, h)}${this.statusLines(s, h)}
         <div class="thought">„${esc(h.thought)}“</div></div></div>`).join('');
     const free = cap - s.heroes.length;
     const hours = Math.max(1, Math.round(1 / arrivalChance(s)));
@@ -406,6 +412,7 @@ export class UI {
 
   showHero(id) {
     const s = this.s;
+    this.bioFull = false;
     const h = s.heroes.find((x) => x.id === id);
     if (!h) return;
     this.game.selectHero?.(id);
@@ -413,11 +420,12 @@ export class UI {
       const evals = evaluateAreas(s, h);
       const areas = evals.map((e) => {
         const a = AREAS[e.id];
-        const why = e.block === 'hated' ? '<span class="bad">hasst es</span>' : e.block === 'danger' ? '<span class="bad">zu gefährlich</span>' : '<span class="ok">traut sich</span>';
+        const encouraged = h.advice?.type === 'encouraged' && h.advice.area === e.id && h.advice.until > s.t;
+        const why = e.block === 'hated' ? '<span class="bad">hasst es</span>' : e.block === 'advice' ? '<span class="bad">du hast abgeraten</span>'
+          : e.block === 'danger' ? '<span class="bad">zu gefährlich</span>' : encouraged ? '<span class="ok">von dir ermutigt</span>' : '<span class="ok">traut sich</span>';
         return `<div class="row small"><span>${a.icon} ${a.name}${h.fav === e.id ? ' ❤️' : ''}</span><span>${Math.round(e.p * 100)}% · ${why}</span></div>`;
       }).join('');
-      const recent = s.log.filter((e) => e.hero === h.id).slice(-6).reverse()
-        .map((e) => `<div class="entry small"><span class="time">${fmtClock(logClock(s, e).minute)}</span><span class="txt">${rich(e.text)}</span></div>`).join('');
+
       return `<div class="herohead"><canvas id="portrait" width="144" height="216"></canvas>
         <div><h2>${esc(h.name)}</h2>
           <div>${CLASSES[h.cls].icon} ${className(h.cls, h.female)} · Stufe ${h.level}</div>
@@ -432,13 +440,14 @@ export class UI {
         <div class="row small"><span>Rüstung</span><span>${gearName(h.armor)}</span></div>
         <div class="row small"><span>Heiltränke</span><span>${h.potions}</span></div>
         <h3>Wesen</h3>
-        ${h.traits.map((t) => `<div class="small"><b>${TRAITS[t].name}</b> – ${TRAITS[t].desc}</div>`).join('')}
+        ${h.traits.map((t) => `<div class="small">${TRAITS[t].acquired || (h.grown ?? []).includes(t) ? '🌱 ' : ''}<b>${TRAITS[t].name}</b> – ${TRAITS[t].desc}</div>`).join('')}
+        ${this.statusLines(s, h)}
         <div class="small">Liebt: ${AREAS[h.fav].icon} ${AREAS[h.fav].name}${h.hated ? ` · Hasst: ${AREAS[h.hated].icon} ${AREAS[h.hated].name}` : ''}</div>
         <h3>Wunsch</h3>${this.goalLine(s, h) || '<p class="small dim">Gerade wunschlos glücklich.</p>'}
         ${h.goalsDone ? `<div class="small dim">Schon ${h.goalsDone}× einen Traum erfüllt.</div>` : ''}
         <h3>Beziehungen</h3>${this.relationsHtml(s, h)}
         <h3>Einschätzung der Gebiete</h3>${areas}
-        <h3>Zuletzt</h3>${recent || '<p class="dim small">–</p>'}`;
+        ${this.bioHtml(s, h)}`;
     };
     const paint = () => { const c = document.getElementById('portrait'); if (c) renderPortrait(c, h, performance.now()); };
     this.modalHtml = body();
@@ -457,6 +466,41 @@ export class UI {
         paint();
       },
     };
+  }
+
+  // Besondere Umstände: Rat, Lehre, Schulden, Wettstreit
+  statusLines(s, h) {
+    const out = [];
+    if (h.advice && h.advice.until > s.t) {
+      const a = AREAS[h.advice.area];
+      out.push(h.advice.type === 'encouraged' ? `🗣️ Von dir ermutigt: ${a.icon} ${a.name}` : `🗣️ Du hast abgeraten: ${a.icon} ${a.name}`);
+    }
+    const mentor = h.mentor ? s.heroes.find((x) => x.id === h.mentor) : null;
+    if (mentor) out.push(`🎓 Lehrling bei ${esc(mentor.name)}`);
+    const pupil = s.heroes.find((x) => x.mentor === h.id);
+    if (pupil) out.push(`🎓 Lehrmeister von ${esc(pupil.name)}`);
+    if (h.debt) out.push(`💰 Schuldet dir ${h.debt.amount} Gold`);
+    if ((h.challengeUntil ?? 0) > s.t) out.push('💢 Im Wettstreit mit einem Rivalen');
+    return out.map((t) => `<div class="small status">${t}</div>`).join('');
+  }
+
+  // Das Heldenbuch: die Lebensgeschichte, neueste Kapitel zuerst
+  bioHtml(s, h) {
+    const entries = (h.bio ?? []).slice().reverse();
+    if (!entries.length) return '';
+    const yours = entries.filter((e) => e.you).length;
+    const shown = this.bioFull ? entries : entries.slice(0, 15);
+    let day = null;
+    const rows = shown.map((e) => {
+      const c = logClock(s, e);
+      const head = c.day !== day ? `<div class="bio-day">Tag ${(day = c.day)}</div>` : '';
+      return `${head}<div class="bio-entry ${e.you ? 'you' : ''} ${e.you && e.icon !== '✋' ? 'mark' : ''}"><span class="ico">${e.icon}</span><span>${esc(e.text)}</span></div>`;
+    }).join('');
+    const more = entries.length > shown.length
+      ? `<button class="link" data-act="biofull">Ganzes Heldenbuch anzeigen (${entries.length} Einträge)</button>` : '';
+    return `<h3>📖 Heldenbuch</h3>
+      <p class="small dim">${yours ? `Du hast ${yours} ${yours === 1 ? 'Kapitel' : 'Kapitel'} dieser Geschichte mitgeschrieben (✋ markiert).` : 'Noch hast du in dieser Geschichte keine Rolle gespielt.'}</p>
+      <div class="bio">${rows}</div>${more}`;
   }
 
   relationsHtml(s, h) {
@@ -484,6 +528,7 @@ export class UI {
       <div><b>${succ}/${adv}</b>Abenteuer</div></div>
       ${this.summaryHtml(s, before, entries)}
       ${s.event ? `<button class="event-btn" data-act="event">${EVENT_BY_ID[s.event.id].icon} <b>${EVENT_BY_ID[s.event.id].title}</b><span>Entscheidung nötig ›</span></button>` : ''}
+      ${s.request ? `<button class="event-btn request" data-act="request">🙋 <b>Eine Bitte wartet auf dich</b><span>Anhören ›</span></button>` : ''}
       ${s.orders.some((o) => o.state === 'offered') ? `<button class="event-btn order" data-act="tab" data-id="auftraege">🧾 <b>Bestellanfrage wartet</b><span>Ansehen ›</span></button>` : ''}
       ${list ? `<h3>Alles der Reihe nach</h3>${list}` : '<p class="dim">Ruhige Zeiten in Eichenfurt.</p>'}
       ${entries.length > 80 ? `<p class="small dim">… und ${entries.length - 80} weitere Einträge in der Chronik.</p>` : ''}
@@ -502,6 +547,10 @@ export class UI {
     add('🌟', 'Traum erfüllt', of('herogoal').map((e) => esc(first(nameOf(e)))));
     add('💛', 'Neue Freundschaft', of('social', (e) => e.data?.kind === 'friend').map((e) => esc(`${first(nameOf(e))} & ${first(heroName(e.data.other) ?? '?')}`)));
     add('⚔️', 'Neue Rivalität', of('social', (e) => e.data?.kind === 'rival').map((e) => esc(`${first(nameOf(e))} & ${first(heroName(e.data.other) ?? '?')}`)));
+    add('🌱', 'Wesenswandel', of('growth', (e) => e.data?.trait).map((e) => esc(`${first(nameOf(e))} ist jetzt ${TRAITS[e.data.trait].name.toLowerCase()}`)));
+    add('🎓', 'Ausgelernt', of('growth', (e) => e.data?.graduated).map((e) => esc(first(nameOf(e)))));
+    add('✋', 'Dein Rat', of('advice').map((e) => esc(`${first(nameOf(e))} ${e.data?.good ? 'siegte' : e.data?.bad ? 'scheiterte' : 'musste fliehen'}`)));
+    add('💰', 'Vorschüsse', of('loan').map((e) => esc(`${first(nameOf(e))} ${e.text.includes('nicht zurückzahlen') || e.text.includes('verschwinden') ? 'zahlt nicht' : 'hat zurückgezahlt'}`)));
     add('⭐', 'Aufgestiegen', of('level').map((e) => esc(`${first(nameOf(e))} (St. ${e.data?.level ?? '?'})`)));
     const deliveries = of('deliver');
     if (deliveries.length) add('📦', 'Kopfgelder', [`${deliveries.length} ${deliveries.length === 1 ? 'Lieferung' : 'Lieferungen'}`]);
@@ -558,6 +607,29 @@ export class UI {
       <button class="wide link" data-act="close">Später entscheiden</button>`);
   }
 
+  showRequest() {
+    const s = this.s;
+    const q = s.request;
+    if (!q) return this.closeModal();
+    const def = REQUESTS[q.type];
+    const h = s.heroes.find((x) => x.id === q.data.hero);
+    if (!h) return this.closeModal();
+    const opts = requestOptions(s).map((o, i) => {
+      const ok = !o.cost?.gold || s.gold >= o.cost.gold;
+      return `<button class="option" data-act="answer" data-i="${i}" ${ok ? '' : 'disabled'}>
+        <b>${esc(o.label)}</b>${o.cost?.gold ? `<span class="cost">${o.cost.gold} 🪙</span>` : ''}
+        ${o.desc ? `<small>${esc(o.desc)}</small>` : ''}</button>`;
+    }).join('');
+    const fallback = requestOptions(s).at(-1).label;
+    this.openModal(`<div class="herohead"><canvas id="portrait" width="144" height="216"></canvas>
+      <div><h2>${def.icon} ${def.title}</h2><p>${rich(def.text(s, q.data))}</p></div></div>
+      <div class="options">${opts}</div>
+      <p class="small dim">${esc(h.name.split(' ')[0])} wartet bis ${fmtClock(clockOf(s, q.expires).minute)} Uhr (noch ${fmtDuration(q.expires - s.t)}), sonst: „${esc(fallback)}“.</p>
+      <button class="wide link" data-act="close">Später antworten</button>`);
+    const c = document.getElementById('portrait');
+    if (c) renderPortrait(c, h, performance.now());
+  }
+
   showSettings() {
     const speeds = [1, 10, 60, 300];
     this.openModal(`<h2>Einstellungen</h2>
@@ -602,6 +674,11 @@ export class UI {
       case 'unqueue': cancelQueued(s, Number(el.dataset.i)); break;
       case 'prio': prioritizeQueued(s, Number(el.dataset.i)); break;
       case 'event': return this.showEvent();
+      case 'request': return this.showRequest();
+      case 'answer':
+        if (resolveRequest(s, Number(el.dataset.i))) { this.closeModal(); this.toast('Geantwortet.'); }
+        break;
+      case 'biofull': this.bioFull = true; this.modal?.refresh?.(); return;
       case 'choose':
         if (resolveEvent(s, Number(el.dataset.i))) { this.closeModal(); this.toast('Entschieden!'); }
         break;

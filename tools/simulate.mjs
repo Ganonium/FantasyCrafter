@@ -6,6 +6,7 @@ import { newGame, advance, queueCraft, buyMaterial, postBounty, upgrade, canUpgr
 import { RECIPES, MATERIALS, AREAS } from '../src/data.js';
 import { EVENT_BY_ID } from '../src/events.js';
 import { PROJECTS } from '../src/goals.js';
+import { requestOptions, resolveRequest } from '../src/requests.js';
 
 const days = Number(process.argv[2] ?? 14);
 const seed = Number(process.argv[3] ?? 42);
@@ -16,6 +17,11 @@ const s = newGame(seed);
 const VISITS = [7 * 60, 10 * 60, 13 * 60, 17 * 60, 21 * 60]; // Uhrzeiten der Besuche
 
 function botVisit() {
+  // Bitte: zufällige Antwort (außer der Vorgabe „keine Zeit“)
+  if (s.request) {
+    const n = requestOptions(s).length;
+    for (let tries = 0; tries < 5 && s.request; tries++) resolveRequest(s, Math.floor(Math.random() * Math.max(1, n - 1)));
+  }
   // Ereignis: zufällige bezahlbare Option
   if (s.event) {
     const n = EVENT_BY_ID[s.event.id].options.length;
