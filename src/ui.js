@@ -135,8 +135,16 @@ export class UI {
     return `${this.goalCard(s)}<section>${html || '<p class="dim">Noch ist nichts passiert.</p>'}</section>`;
   }
 
+  showUpdate() {
+    this.updateReady = true;
+    this.lastBanner = null;
+  }
+
   bannerHtml(s) {
     let html = '';
+    if (this.updateReady) {
+      html += '<button class="event-btn update" data-act="reload">✨ <b>Neue Version verfügbar</b><span>Neu laden ›</span></button>';
+    }
     if (s.event) {
       const def = EVENT_BY_ID[s.event.id];
       html += `<button class="event-btn" data-act="event">${def.icon} <b>${def.title}</b><span>Entscheiden ›</span></button>`;
@@ -487,7 +495,7 @@ export class UI {
   // Das Heldenbuch: die Lebensgeschichte, neueste Kapitel zuerst
   bioHtml(s, h) {
     const entries = (h.bio ?? []).slice().reverse();
-    if (!entries.length) return '';
+    if (!entries.length) return '<h3>📖 Heldenbuch</h3><p class="small dim">Die ersten Seiten sind noch leer – die Geschichte beginnt gerade.</p>';
     const yours = entries.filter((e) => e.you).length;
     const shown = this.bioFull ? entries : entries.slice(0, 15);
     let day = null;
@@ -675,6 +683,7 @@ export class UI {
       case 'prio': prioritizeQueued(s, Number(el.dataset.i)); break;
       case 'event': return this.showEvent();
       case 'request': return this.showRequest();
+      case 'reload': this.game.save(); location.reload(); return;
       case 'answer':
         if (resolveRequest(s, Number(el.dataset.i))) { this.closeModal(); this.toast('Geantwortet.'); }
         break;
