@@ -1,0 +1,13 @@
+# GitLab Pages: Bei jedem Push auf main wird das Spiel unter https://ganonium.gitlab.io/fantasycrafter/ veröffentlicht.
+# Kein Build-Schritt nötig – die Spieldateien werden nur nach public/ kopiert.
+pages:
+  stage: deploy
+  image: alpine:3.20
+  script:
+    - mkdir -p public
+    - cp -r index.html manifest.webmanifest sw.js version.json icon.svg icon-192.png icon-512.png css src public/
+  artifacts:
+    paths:
+      - public
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
