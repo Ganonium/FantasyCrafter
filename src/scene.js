@@ -1,15 +1,14 @@
 // Dorfszene auf Canvas (Vektorgrafik): Gebäude, Tageszeit und die Helden, die gerade im Dorf sind.
 // Logische Koordinaten 200 × 112, gerendert in voller Bildschirmauflösung.
 
-import { drawHero } from './sprites.js';
+import { drawHero, heroLook } from './sprites.js';
 import { RECIPES } from './data.js';
 import { clockOf, isNight } from './sim.js';
 
 export const W = 200;
 export const H = 112;
-const EXIT = { x: 214, y: 100 };
-const TAVERN_DOOR = { x: 166.5, y: 82 };
-const HERO_SIZE = 21;
+// Helden stehen in zwei Reihen auf dem Dorfplatz vor den Häusern
+const ROWS = [{ y: 106, size: 36 }, { y: 98, size: 32 }];
 const LINE = '#2a1c14';
 const LW = 0.45;
 
@@ -29,7 +28,7 @@ export class VillageScene {
       const x = ((e.clientX - rect.left) / rect.width) * W;
       const y = ((e.clientY - rect.top) / rect.height) * H;
       const hit = [...this.actors.values()]
-        .filter((a) => !a.hidden && x >= a.x - 8 && x <= a.x + 8 && y >= a.y - 30 && y <= a.y + 2)
+        .filter((a) => a.alpha > 0.5 && Math.abs(x - a.x) <= a.size * 0.38 && y >= a.y - a.size * 1.3 && y <= a.y + 2)
         .sort((a, b) => b.y - a.y)[0];
       if (hit) onHeroTap(hit.id);
     });
@@ -49,65 +48,38 @@ export class VillageScene {
     return this.seed / 2147483647;
   }
 
-  randomSpot(hero) {
-    if (hero.state === 'rest') return { x: 140 + this.rand() * 52, y: 86 + this.rand() * 18 };
-    const spots = [
-      { x: 30, y: 86 }, { x: 94, y: 86 }, { x: 131, y: 88 }, { x: 166, y: 86 },
-    ];
-    if (this.rand() < 0.45) {
-      const s = spots[Math.floor(this.rand() * spots.length)];
-      return { x: s.x + (this.rand() - 0.5) * 10, y: s.y + this.rand() * 4 };
-    }
-    return { x: 12 + this.rand() * 180, y: 86 + this.rand() * 22 };
-  }
-
+  // Wer im Dorf ist, bekommt einen festen Platz (nach Ankunft sortiert); Kommen und Gehen wird überblendet.
   sync(state) {
-    const night = isNight(state);
-    for (const h of state.heroes) {
-      const inVillage = h.state !== 'away';
+    const present = state.heroes.filter((h) => h.state !== 'away');
+    for (const h of present) {
       let a = this.actors.get(h.id);
-      if (inVillage && (!a || a.leaving)) {
-        const start = this.first ? this.randomSpot(h) : { ...EXIT };
-        a = { id: h.id, x: start.x, y: start.y, tx: start.x, ty: start.y, wait: this.rand() * 2, flip: true, phase: 0, moving: false };
-        if (this.first && night) { a.hidden = true; a.x = TAVERN_DOOR.x; a.y = TAVERN_DOOR.y; }
+      if (!a) {
+        a = { id: h.id, alpha: this.first ? 1 : 0, x: null, y: 0, size: 0 };
         this.actors.set(h.id, a);
       }
-      if (a) a.hero = h;
-      if (a && !inVillage && !a.leaving) {
-        a.leaving = true; a.hidden = false; a.tx = EXIT.x; a.ty = EXIT.y; a.wait = 0;
-      }
-      if (a && inVillage) {
-        a.injured = h.state === 'injured';
-        a.night = night;
-      }
+      a.hero = h;
+      a.leaving = false;
     }
-    for (const [id, a] of this.actors) if (!state.heroes.some((h) => h.id === id)) { a.leaving = true; a.tx = EXIT.x; a.ty = EXIT.y; }
+    for (const a of this.actors.values()) if (!present.some((h) => h.id === a.id)) a.leaving = true;
+    const staying = [...this.actors.values()].filter((a) => !a.leaving).sort((a, b) => a.id - b.id);
+    const n = staying.length;
+    staying.forEach((a, i) => {
+      // abwechselnd vorne/hinten, gleichmäßig über die Breite verteilt
+      const row = n > 3 ? ROWS[i % 2] : ROWS[0];
+      a.tx = 16 + (168 * (i + 0.5)) / Math.max(n, 1);
+      a.y = row.y; a.size = row.size;
+      if (a.x === null) a.x = a.tx;
+      a.flip = a.tx > 100;
+    });
+    this.night = isNight(state);
     this.first = false;
   }
 
   update(dt) {
     for (const [id, a] of this.actors) {
-      const speed = a.injured ? 6 : 14;
-      a.moving = false;
-      if (a.night && !a.leaving) { a.tx = TAVERN_DOOR.x; a.ty = TAVERN_DOOR.y; a.wait = 0; }
-      if (!a.night && a.hidden) { a.hidden = false; a.wait = 1 + this.rand() * 3; }
-      if (a.wait > 0) { a.wait -= dt; continue; }
-      const dx = a.tx - a.x, dy = a.ty - a.y;
-      const dist = Math.hypot(dx, dy);
-      if (dist < 0.8) {
-        if (a.leaving) { this.actors.delete(id); continue; }
-        if (a.night) { a.hidden = true; continue; }
-        a.wait = 2 + this.rand() * 6;
-        const s = this.randomSpot(a.hero);
-        a.tx = s.x; a.ty = s.y;
-        continue;
-      }
-      const step = Math.min(dist, speed * dt);
-      a.x += (dx / dist) * step;
-      a.y += (dy / dist) * step;
-      if (Math.abs(dx) > 0.5) a.flip = dx < 0;
-      a.moving = true;
-      a.phase += dt * (a.injured ? 6 : 11);
+      a.alpha = Math.max(0, Math.min(1, a.alpha + (a.leaving ? -dt * 1.5 : dt * 1.5)));
+      if (a.leaving && a.alpha <= 0) { this.actors.delete(id); continue; }
+      if (a.x !== null && a.tx !== undefined) a.x += (a.tx - a.x) * Math.min(1, dt * 3);
     }
     for (const p of this.smoke) { p.y -= dt * 5; p.x += dt * 2.5; p.r += dt * 0.9; p.life -= dt; }
     this.smoke = this.smoke.filter((p) => p.life > 0);
@@ -140,29 +112,12 @@ export class VillageScene {
       ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2); ctx.fill();
     }
 
-    // Helden nach Tiefe sortiert
-    const actors = [...this.actors.values()].filter((a) => !a.hidden && a.hero).sort((a, b) => a.y - b.y);
-    for (const a of actors) {
-      drawHero(ctx, a.hero, a.x, a.y, { flip: a.flip, walk: a.phase, moving: a.moving, time, injured: a.injured, size: HERO_SIZE });
-      const emo = a.injured ? '🩹' : a.hero.state === 'rest' ? '🍺' : null;
-      if (emo && !a.leaving) {
-        ctx.font = '5px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.fillText(emo, a.x + 6, a.y - 25);
-      }
-      if (this.selected === a.id) {
-        const bob = Math.sin(time / 200) * 0.8;
-        ctx.beginPath();
-        ctx.moveTo(a.x - 2.2, a.y - 34 + bob); ctx.lineTo(a.x + 2.2, a.y - 34 + bob); ctx.lineTo(a.x, a.y - 31 + bob); ctx.closePath();
-        ctx.fillStyle = '#ffd95a'; ctx.fill(); ctx.strokeStyle = LINE; ctx.lineWidth = 0.4; ctx.stroke();
-      }
-    }
-
-    // Nacht: abdunkeln, dann Lichter
-    if (light < 0.95) {
-      ctx.fillStyle = `rgba(12,16,46,${(0.95 - light) * 0.58})`;
+    // Nacht: Kulisse abdunkeln, dann Lichter
+    const dark = light < 0.95 ? 0.95 - light : 0;
+    if (dark > 0) {
+      ctx.fillStyle = `rgba(12,16,46,${dark * 0.58})`;
       ctx.fillRect(0, 0, W, H);
-      const strength = Math.min(1, (0.95 - light) * 1.6);
+      const strength = Math.min(1, dark * 1.6);
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
       for (const l of this.lights) {
@@ -177,6 +132,40 @@ export class VillageScene {
         ctx.fillStyle = `rgba(255,205,110,${0.85 * strength})`;
         ctx.beginPath(); ctx.roundRect(wdw[0], wdw[1], wdw[2], wdw[3], 0.6); ctx.fill();
       }
+    }
+
+    // Vordergrund: die Helden, nach Tiefe sortiert. Sie bleiben auch nachts gut erkennbar.
+    const actors = [...this.actors.values()].filter((a) => a.hero && a.x !== null).sort((a, b) => a.y - b.y);
+    for (const a of actors) {
+      const look = heroLook(a.hero, this.night);
+      ctx.save();
+      ctx.globalAlpha = a.alpha;
+      drawHero(ctx, a.hero, a.x, a.y, { ...look, flip: a.flip, time, size: a.size });
+      ctx.restore();
+      const top = a.y - a.size * (look.pose === 'sit' ? 1.05 : 1.25);
+      if (look.eyes === 'closed' && a.alpha > 0.5) {
+        const t = time / 900 + a.id;
+        ctx.fillStyle = 'rgba(235,240,255,0.9)';
+        ctx.textAlign = 'center';
+        for (let i = 0; i < 3; i++) {
+          const ph = (t + i / 3) % 1;
+          ctx.globalAlpha = Math.sin(ph * Math.PI);
+          ctx.font = `bold ${2.2 + ph * 2}px sans-serif`;
+          ctx.fillText('z', a.x + (a.flip ? -4 : 4) + ph * 4 * (a.flip ? -1 : 1), top - ph * 6);
+        }
+        ctx.globalAlpha = 1;
+      }
+      if (this.selected === a.id) {
+        const bob = Math.sin(time / 200) * 0.8;
+        const y0 = top - 4 + bob;
+        ctx.beginPath();
+        ctx.moveTo(a.x - 2.4, y0 - 3); ctx.lineTo(a.x + 2.4, y0 - 3); ctx.lineTo(a.x, y0); ctx.closePath();
+        ctx.fillStyle = '#ffd95a'; ctx.fill(); ctx.strokeStyle = LINE; ctx.lineWidth = 0.4; ctx.stroke();
+      }
+    }
+    if (dark > 0) {
+      ctx.fillStyle = `rgba(12,16,46,${dark * 0.22})`;
+      ctx.fillRect(0, 0, W, H);
     }
     if (crafting) {
       const f = 0.6 + 0.4 * Math.sin(time / 110) * Math.sin(time / 43);

@@ -92,11 +92,29 @@ function glow(ctx, x, y, r, rgb, time, speed = 400) {
 }
 
 /**
+ * Wie ein Held gerade aussieht – leitet Haltung, Augen und Spuren aus dem Spielzustand ab.
+ * night: in der Nacht schlafen Erholende, alle anderen sind müde.
+ */
+export function heroLook(hero, night = false) {
+  const injured = hero.state === 'injured';
+  const resting = hero.state === 'rest';
+  return {
+    injured,
+    pose: injured || resting ? 'sit' : 'stand',
+    eyes: resting && night ? 'closed' : resting || injured || night ? 'tired' : 'open',
+    dirty: resting || injured,
+    mug: resting && !night,
+    mood: hero.mood ?? 60,
+  };
+}
+
+/**
  * Zeichnet einen Helden. x/y = Fußpunkt im Kontext, size = Körperhöhe in Kontext-Einheiten.
- * opts: { flip, walk (Phase in Radiant), moving, time (ms), injured, size }
+ * opts: { flip, time (ms), size, injured, pose ('stand'|'sit'), eyes ('open'|'tired'|'closed'), dirty, mug, mood }
  */
 export function drawHero(ctx, hero, x, y, opts = {}) {
-  const { flip = false, walk = 0, moving = false, time = 0, injured = false, size = 24 } = opts;
+  const { flip = false, time = 0, size = 24, injured = false, pose = 'stand', dirty = false, mug = false } = opts;
+  const sit = pose === 'sit';
   const u = size / 100;
   ctx.save();
   ctx.translate(x, y);
@@ -104,7 +122,7 @@ export function drawHero(ctx, hero, x, y, opts = {}) {
   ctx.lineJoin = 'round';
 
   const look = hero.look;
-  const skin = SKIN[look.skin];
+  const skin = injured ? mixHex(SKIN[look.skin], '#b8bca8', 0.3) : SKIN[look.skin];
   const hair = HAIR[look.hair];
   const base = BASE[hero.cls];
   const at = tierOf(hero.armor);
@@ -112,51 +130,57 @@ export function drawHero(ctx, hero, x, y, opts = {}) {
   const ar = ARMOR[hero.cls][at];
   const torso = ar?.torso ?? base.torso;
   const arm = ar?.arm ?? base.arm;
-  const swing = moving ? Math.sin(walk) * 0.45 : 0;
-  const bob = moving ? -Math.abs(Math.sin(walk)) * 3 : 0;
+  const isRobe = hero.cls === 'magier';
+  const seed = hero.id * 7919;
+  // Blinzeln und Atmen, damit die Figuren nicht wie Pappaufsteller wirken
+  let eyes = opts.eyes ?? 'open';
+  if (eyes !== 'closed' && (time + seed) % 4300 < 140) eyes = 'closed';
+  const breath = Math.sin(time / (sit ? 900 : 700) + seed) * (eyes === 'closed' && sit ? 1.6 : 0.8);
 
   // Schatten
-  ctx.fillStyle = 'rgba(0,0,0,0.22)';
-  ellipse(ctx, 0, 0, 24, 5); ctx.fill();
+  ctx.fillStyle = 'rgba(0,0,0,0.25)';
+  ellipse(ctx, sit ? 4 : 0, 0, sit ? 30 : 24, 5); ctx.fill();
 
-  ctx.translate(0, bob);
+  if (sit) stool(ctx);
 
-  // Bogen hängt hinter dem Körper, wenn er nicht benutzt wird – hier immer in der Hand, also später
-  // Hinteres Bein / Robe
-  const isRobe = hero.cls === 'magier';
+  // Waffe lehnt neben Sitzenden
+  if (sit && wt > 0) leanWeapon(ctx, hero.cls, wt, time);
+  if (sit && wt === 0 && hero.cls === 'krieger') leanWeapon(ctx, 'krieger', 0, time);
+
+  // Beine
   if (!isRobe) {
-    leg(ctx, -5, -30, -swing, base.legs);
+    if (sit) { sitLeg(ctx, -2, 14, shade(base.legs, -15)); }
+    else leg(ctx, -5, -30, 0, base.legs);
   }
+
+  const lift = sit ? 14 : 0;
+  ctx.save();
+  ctx.translate(0, lift);
+  // Oberkörper: atmen und – wenn erschöpft – zusammensacken
+  const slump = injured || opts.eyes === 'tired' || opts.eyes === 'closed';
+  ctx.translate(0, -30); ctx.rotate(slump ? 0.06 : 0); ctx.scale(1, 1 + breath * 0.006); ctx.translate(0, 30);
+
   // Hinterer Arm
-  capsule(ctx, -9, -54, -12 - swing * 10, -34, 9, shade(arm, -18));
+  capsule(ctx, -9, -54, sit ? -10 : -12, sit ? -36 : -34, 9, shade(arm, -18));
   if (hero.cls === 'waldlaeufer') { // Köcher auf dem Rücken
     rr(ctx, -22, -66, 10, 30, 4); shape(ctx, '#6e4a2c', 2.5);
     ctx.strokeStyle = '#d8c8a8'; ctx.lineWidth = 2;
     for (const dx of [-19, -16]) { ctx.beginPath(); ctx.moveTo(dx, -66); ctx.lineTo(dx - 2, -74); ctx.stroke(); }
   }
-  if (!isRobe) leg(ctx, 5, -30, swing, base.legs);
+  ctx.restore();
+
+  if (!isRobe) {
+    if (sit) sitLeg(ctx, 4, 20, base.legs);
+    else leg(ctx, 5, -30, 0, base.legs);
+  }
+
+  ctx.save();
+  ctx.translate(0, lift);
+  ctx.translate(0, -30); ctx.rotate(slump ? 0.06 : 0); ctx.scale(1, 1 + breath * 0.006); ctx.translate(0, 30);
 
   // Robe oder Oberkörper
   if (isRobe) {
-    ctx.beginPath();
-    ctx.moveTo(-14, -60);
-    ctx.quadraticCurveTo(-24, -20, -24, -3);
-    ctx.quadraticCurveTo(0, 2, 24, -3);
-    ctx.quadraticCurveTo(24, -20, 14, -60);
-    ctx.closePath();
-    shape(ctx, torso);
-    if (ar?.accent) {
-      ctx.beginPath(); ctx.moveTo(-23, -6); ctx.quadraticCurveTo(0, -1, 23, -6);
-      ctx.strokeStyle = ar.accent; ctx.lineWidth = 4; ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(4, -58); ctx.lineTo(6, -2);
-      ctx.strokeStyle = ar.accent; ctx.lineWidth = 5; ctx.stroke();
-    } else {
-      ctx.beginPath(); ctx.moveTo(4, -58); ctx.lineTo(6, -2);
-      ctx.strokeStyle = shade(torso, -25); ctx.lineWidth = 4; ctx.stroke();
-    }
-    // Füße
-    ellipse(ctx, -8 + swing * 6, -2, 7, 4); shape(ctx, BOOT, 2.5);
-    ellipse(ctx, 10 - swing * 6, -2, 7, 4); shape(ctx, BOOT, 2.5);
+    robe(ctx, sit, lift, torso, ar);
   } else {
     rr(ctx, -15, -61, 30, 35, 10);
     shape(ctx, torso);
@@ -175,6 +199,15 @@ export function drawHero(ctx, hero, x, y, opts = {}) {
     ellipse(ctx, -12, -58, 9, 6, -0.3); shape(ctx, ar.pads, 2.5);
     ellipse(ctx, 12, -58, 9, 6, 0.3); shape(ctx, ar.pads, 2.5);
   }
+  // Heiltränke am Gürtel – man sieht, ob jemand vorgesorgt hat
+  for (let i = 0; i < Math.min(3, hero.potions || 0); i++) potion(ctx, -12 + i * 6.5, -30);
+  if (dirty) grime(ctx, seed, -15, -60, 30, 32);
+  if (injured) { // Verband um den Bauch
+    ctx.save(); rr(ctx, -15, -61, 30, 35, 10); ctx.clip();
+    ctx.fillStyle = '#f4efe4'; ctx.fillRect(-16, -50, 32, 7);
+    ctx.fillStyle = 'rgba(190,40,40,0.75)'; ellipse(ctx, 5, -46.5, 3, 2.2); ctx.fill();
+    ctx.restore();
+  }
 
   // Kapuze hinter dem Kopf
   if (hero.cls === 'waldlaeufer' && ar?.hood) {
@@ -187,22 +220,37 @@ export function drawHero(ctx, hero, x, y, opts = {}) {
     shape(ctx, shade(ar.hood, -15));
   }
 
-  // Kopf
-  head(ctx, skin, hair, look, hero, ar);
+  // Kopf (bei Erschöpfung leicht gesenkt)
+  ctx.save();
+  ctx.translate(0, -60); ctx.rotate(slump ? 0.12 : 0); ctx.translate(0, 60);
+  head(ctx, skin, hair, look, hero, ar, { eyes, mood: opts.mood ?? hero.mood ?? 60, injured, dirty, seed });
+  ctx.restore();
 
-  // Waffe + vorderer Arm
-  const reach = hero.cls === 'waldlaeufer' && wt > 0 ? 21 : 24;
-  const hand = { x: reach + swing * 6, y: -37 };
-  if (hero.cls === 'waldlaeufer' && wt > 0) bow(ctx, wt, hand, time);
-  if (hero.cls === 'magier' && wt > 0) staff(ctx, wt, hand, time);
-  if (hero.cls === 'krieger' || wt === 0) melee(ctx, wt, hand, time);
-  capsule(ctx, 9, -54, hand.x, hand.y, 9, arm);
-  ellipse(ctx, hand.x, hand.y, 5, 5); shape(ctx, skin, 2.5);
+  // Vorderer Arm
   if (injured) {
-    // Verband am Arm
-    ctx.strokeStyle = '#f6f2ea'; ctx.lineWidth = 5;
-    ctx.beginPath(); ctx.moveTo(10, -48); ctx.lineTo(13, -42); ctx.stroke();
+    // Arm in der Schlinge
+    capsule(ctx, 9, -54, 9, -40, 9, arm);
+    capsule(ctx, 9, -40, 21, -46, 9, arm);
+    ellipse(ctx, 22, -46, 5, 5); shape(ctx, skin, 2.5);
+    ctx.beginPath(); ctx.moveTo(2, -36); ctx.lineTo(25, -51); ctx.lineTo(6, -48); ctx.closePath();
+    shape(ctx, '#f4efe4', 2);
+    ctx.strokeStyle = '#e4ddcc'; ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.moveTo(6, -48); ctx.lineTo(-6, -61); ctx.stroke();
+  } else if (sit) {
+    const hand = { x: 18, y: -33 };
+    capsule(ctx, 9, -54, hand.x, hand.y, 9, arm);
+    if (mug) tankard(ctx, hand.x + 2, hand.y - 6);
+    ellipse(ctx, hand.x, hand.y, 5, 5); shape(ctx, skin, 2.5);
+  } else {
+    const reach = hero.cls === 'waldlaeufer' && wt > 0 ? 21 : 24;
+    const hand = { x: reach, y: -37 };
+    if (hero.cls === 'waldlaeufer' && wt > 0) bow(ctx, wt, hand, time);
+    if (hero.cls === 'magier' && wt > 0) staff(ctx, wt, hand, time, lift);
+    if (hero.cls === 'krieger' || wt === 0) melee(ctx, wt, hand, time);
+    capsule(ctx, 9, -54, hand.x, hand.y, 9, arm);
+    ellipse(ctx, hand.x, hand.y, 5, 5); shape(ctx, skin, 2.5);
   }
+  ctx.restore();
 
   ctx.restore();
 }
@@ -213,6 +261,98 @@ function leg(ctx, hx, hy, angle, color) {
   ctx.rotate(angle);
   rr(ctx, -5, -2, 10, 26, 4); shape(ctx, color, 2.5);
   rr(ctx, -6, 20, 15, 9, 4); shape(ctx, BOOT, 2.5);
+  ctx.restore();
+}
+
+// Sitzendes Bein: Oberschenkel nach vorn, Unterschenkel nach unten
+function sitLeg(ctx, hipX, kneeX, color) {
+  capsule(ctx, hipX, -17, kneeX, -17, 10, color);
+  capsule(ctx, kneeX, -17, kneeX + 1, -7, 9, color);
+  rr(ctx, kneeX - 5, -9, 15, 9, 4); shape(ctx, BOOT, 2.5);
+}
+
+function stool(ctx) {
+  // Holzfass als Sitz
+  rr(ctx, -16, -20, 26, 20, 6); shape(ctx, '#8a5a30', 2.5);
+  ctx.strokeStyle = '#4a4a52'; ctx.lineWidth = 2.5;
+  for (const yy of [-15, -5]) { ctx.beginPath(); ctx.moveTo(-16, yy); ctx.lineTo(10, yy); ctx.stroke(); }
+  ctx.strokeStyle = 'rgba(0,0,0,0.2)'; ctx.lineWidth = 1.5;
+  for (const xx of [-8, 0]) { ctx.beginPath(); ctx.moveTo(xx, -19); ctx.lineTo(xx, -1); ctx.stroke(); }
+}
+
+function robe(ctx, sit, lift, torso, ar) {
+  // Koordinaten im angehobenen Oberkörper-Rahmen; Weltkoordinate = y + lift
+  if (sit) {
+    // Stoff hängt von den Knien bis zu den Knöcheln
+    ctx.beginPath(); ctx.moveTo(13, -31); ctx.lineTo(29, -31); ctx.lineTo(31, -17); ctx.lineTo(11, -17); ctx.closePath();
+    shape(ctx, shade(torso, -14), 2.5);
+    ellipse(ctx, 15, -1 - lift, 7, 4); shape(ctx, BOOT, 2.5);
+    ellipse(ctx, 27, -1 - lift, 7, 4); shape(ctx, BOOT, 2.5);
+  }
+  ctx.beginPath();
+  if (sit) {
+    ctx.moveTo(-14, -60);
+    ctx.quadraticCurveTo(-22, -46, -18, -34);
+    ctx.lineTo(22, -39);
+    ctx.quadraticCurveTo(31, -38, 29, -28);
+    ctx.quadraticCurveTo(20, -26, 12, -30);
+    ctx.quadraticCurveTo(12, -46, 14, -60);
+  } else {
+    ctx.moveTo(-14, -60);
+    ctx.quadraticCurveTo(-24, -20, -24, -3);
+    ctx.quadraticCurveTo(0, 2, 24, -3);
+    ctx.quadraticCurveTo(24, -20, 14, -60);
+  }
+  ctx.closePath();
+  shape(ctx, torso);
+  ctx.strokeStyle = ar?.accent ?? shade(torso, -25); ctx.lineWidth = ar?.accent ? 5 : 4;
+  ctx.beginPath(); ctx.moveTo(4, -58); ctx.lineTo(6, sit ? -34 : -2); ctx.stroke();
+  if (ar?.accent) {
+    ctx.lineWidth = 4; ctx.beginPath();
+    if (sit) { ctx.moveTo(29, -29); ctx.quadraticCurveTo(20, -27, 13, -30); }
+    else { ctx.moveTo(-23, -6); ctx.quadraticCurveTo(0, -1, 23, -6); }
+    ctx.stroke();
+  }
+  // Schärpe
+  rr(ctx, -15, -38, 30, 5, 2); shape(ctx, shade(torso, -35), 2);
+  if (!sit) {
+    ellipse(ctx, -8, -2, 7, 4); shape(ctx, BOOT, 2.5);
+    ellipse(ctx, 10, -2, 7, 4); shape(ctx, BOOT, 2.5);
+  }
+}
+
+function potion(ctx, x, y) {
+  ctx.beginPath(); ctx.arc(x, y + 3, 3.4, 0, Math.PI * 2); shape(ctx, '#d84a6a', 1.5);
+  rr(ctx, x - 1.3, y - 2.5, 2.6, 3, 0.8); shape(ctx, '#e8dcc4', 1.2);
+  ctx.fillStyle = 'rgba(255,255,255,0.6)'; ellipse(ctx, x - 1.1, y + 2, 0.9, 1.2); ctx.fill();
+}
+
+function tankard(ctx, x, y) {
+  rr(ctx, x - 5, y - 4, 10, 12, 2); shape(ctx, '#9a6a3a', 2);
+  ctx.beginPath(); ctx.arc(x + 6, y + 2, 3.5, -1.3, 1.3); ctx.strokeStyle = LINE; ctx.lineWidth = 2; ctx.stroke();
+  ellipse(ctx, x, y - 4.5, 6, 3); shape(ctx, '#fbf6ea', 1.5);
+}
+
+// Schmutz und Kratzer nach einem Abenteuer
+function grime(ctx, seed, x, y, w, h) {
+  ctx.save();
+  rr(ctx, x, y, w, h, 10); ctx.clip();
+  ctx.fillStyle = 'rgba(80,55,30,0.35)';
+  for (let i = 0; i < 4; i++) {
+    const px = x + ((seed * (i + 3)) % 97) / 97 * w, py = y + ((seed * (i + 7)) % 89) / 89 * h;
+    ellipse(ctx, px, py, 3 + (i % 2) * 2, 2, i); ctx.fill();
+  }
+  ctx.strokeStyle = 'rgba(60,30,20,0.5)'; ctx.lineWidth = 1.2;
+  const sx = x + ((seed * 13) % 71) / 71 * w * 0.7 + 4, sy = y + 6 + ((seed * 5) % 13);
+  ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(sx + 7, sy + 5); ctx.moveTo(sx + 2, sy - 1); ctx.lineTo(sx + 8, sy + 3); ctx.stroke();
+  ctx.restore();
+}
+
+function leanWeapon(ctx, cls, tier, time) {
+  ctx.save();
+  if (cls === 'magier') { ctx.translate(38, 0); ctx.rotate(-0.1); staffShape(ctx, tier, time); }
+  else if (cls === 'waldlaeufer') { const half = tier >= 2 ? 40 : 32; ctx.translate(34, -half - 1); ctx.rotate(-0.12); bowShape(ctx, tier, time); }
+  else { ctx.translate(31, -6); ctx.rotate(-0.22); meleeShape(ctx, tier, time); }
   ctx.restore();
 }
 
@@ -264,7 +404,7 @@ function torsoDetails(ctx, cls, tier, ar, torso) {
   ctx.strokeStyle = LINE; ctx.lineWidth = 3; ctx.stroke();
 }
 
-function head(ctx, skin, hair, look, hero, ar) {
+function head(ctx, skin, hair, look, hero, ar, face = {}) {
   const cx = 3, cy = -80, r = 20;
   // lange Haare hinten
   if (look.hairStyle === 1 && !(hero.cls === 'krieger' && ar?.helm)) {
@@ -281,16 +421,51 @@ function head(ctx, skin, hair, look, hero, ar) {
   // Wangen
   ctx.fillStyle = 'rgba(220,90,80,0.25)';
   ellipse(ctx, cx + 13, cy + 7, 4, 2.5); ctx.fill();
-  // Augen
-  ctx.fillStyle = LINE;
-  ellipse(ctx, cx + 5, cy + 1, 2.2, 3); ctx.fill();
-  ellipse(ctx, cx + 14, cy + 1, 2.2, 3); ctx.fill();
-  ctx.fillStyle = '#ffffff';
-  ellipse(ctx, cx + 5.6, cy, 0.8, 0.8); ctx.fill();
-  ellipse(ctx, cx + 14.6, cy, 0.8, 0.8); ctx.fill();
+  // Augen: offen, müde (Lider halb zu, Augenringe) oder geschlossen
+  const eyes = face.eyes ?? 'open';
+  for (const ex of [cx + 5, cx + 14]) {
+    const ey = cy + 1;
+    if (eyes === 'closed') {
+      ctx.strokeStyle = LINE; ctx.lineWidth = 1.8;
+      ctx.beginPath(); ctx.arc(ex, ey - 1, 2.6, 0.3, Math.PI - 0.3); ctx.stroke();
+      continue;
+    }
+    ctx.fillStyle = LINE; ellipse(ctx, ex, ey, 2.2, 3); ctx.fill();
+    ctx.fillStyle = '#ffffff'; ellipse(ctx, ex + 0.6, ey - 1, 0.8, 0.8); ctx.fill();
+    if (eyes === 'tired') {
+      ctx.fillStyle = skin;
+      ctx.beginPath(); ctx.ellipse(ex, ey, 3, 3.6, 0, Math.PI, 0); ctx.fill();
+      ctx.strokeStyle = LINE; ctx.lineWidth = 1.6;
+      ctx.beginPath(); ctx.moveTo(ex - 3, ey); ctx.lineTo(ex + 3, ey); ctx.stroke();
+      ctx.strokeStyle = 'rgba(90,60,90,0.45)'; ctx.lineWidth = 1.2;
+      ctx.beginPath(); ctx.arc(ex, ey + 2, 2.6, 0.4, Math.PI - 0.4); ctx.stroke();
+    }
+  }
+  // Augenbrauen zeigen die Laune
+  const mood = face.mood ?? 60;
+  ctx.strokeStyle = shade(hair, -20); ctx.lineWidth = 1.8;
+  const tilt = mood < 35 ? 2 : mood > 75 ? -0.6 : 0;
+  ctx.beginPath(); ctx.moveTo(cx + 2.5, cy - 5 + tilt * 0.2); ctx.lineTo(cx + 7.5, cy - 5 - tilt);
+  ctx.moveTo(cx + 11.5, cy - 5 - tilt); ctx.lineTo(cx + 16.5, cy - 5 + tilt * 0.2); ctx.stroke();
   // Mund
   ctx.strokeStyle = LINE; ctx.lineWidth = 1.8; ctx.lineCap = 'round';
-  ctx.beginPath(); ctx.arc(cx + 10, cy + 9, 3.5, 0.2, Math.PI - 0.6); ctx.stroke();
+  ctx.beginPath();
+  if (face.injured) { // verzogener Mund
+    ctx.moveTo(cx + 6, cy + 11); ctx.quadraticCurveTo(cx + 8, cy + 9, cx + 10, cy + 11); ctx.quadraticCurveTo(cx + 12, cy + 13, cx + 14, cy + 10.5);
+  } else if (mood >= 70) ctx.arc(cx + 10, cy + 8, 4, 0.15, Math.PI - 0.5);
+  else if (mood >= 40) { ctx.moveTo(cx + 7, cy + 11); ctx.quadraticCurveTo(cx + 10, cy + 12.5, cx + 13, cy + 10.5); }
+  else ctx.arc(cx + 10, cy + 14, 3.6, Math.PI + 0.5, -0.3);
+  ctx.stroke();
+  // Spuren
+  if (face.dirty) {
+    ctx.fillStyle = 'rgba(80,55,30,0.35)'; ellipse(ctx, cx - 6, cy + 8, 3.5, 2, 0.4); ctx.fill();
+  }
+  if (face.injured) {
+    ctx.fillStyle = 'rgba(120,70,150,0.45)'; ellipse(ctx, cx + 15, cy + 6, 3.5, 2.6); ctx.fill(); // Bluterguss
+    ctx.save(); ctx.translate(cx - 4, cy + 4); ctx.rotate(-0.5); // Pflaster
+    rr(ctx, -4, -1.6, 8, 3.2, 1); shape(ctx, '#ecd2a8', 1);
+    ctx.restore();
+  }
   // Bart
   if (look.beard) {
     ctx.beginPath();
@@ -393,6 +568,12 @@ function melee(ctx, tier, h, time) {
   ctx.save();
   ctx.translate(h.x, h.y);
   ctx.rotate(0.5);
+  meleeShape(ctx, tier, time);
+  ctx.restore();
+}
+
+// Nahkampfwaffe mit dem Griff im Ursprung, Klinge nach oben
+function meleeShape(ctx, tier, time) {
   if (tier === 0) { // Knüppel
     ctx.beginPath(); ctx.moveTo(-3, 6); ctx.lineTo(-5, -28); ctx.quadraticCurveTo(0, -36, 5, -28); ctx.lineTo(3, 6); ctx.closePath();
     shape(ctx, '#7a5634', 2.5);
@@ -407,21 +588,26 @@ function melee(ctx, tier, h, time) {
     const len = [0, 26, 40, 46][tier];
     const blade = ['', '#c4cad0', '#e6eaee', '#a8dcff'][tier];
     ctx.beginPath(); ctx.moveTo(-3.5, -6); ctx.lineTo(-3, -6 - len); ctx.lineTo(0, -12 - len); ctx.lineTo(3, -6 - len); ctx.lineTo(3.5, -6); ctx.closePath();
-    const g = ctx.createLinearGradient(-4, 0, 4, 0); g.addColorStop(0, blade); g.addColorStop(0.5, '#ffffff'); g.addColorStop(1, shade(blade.startsWith('#') ? blade : '#cccccc', -40));
+    const g = ctx.createLinearGradient(-4, 0, 4, 0); g.addColorStop(0, blade); g.addColorStop(0.5, '#ffffff'); g.addColorStop(1, shade(blade, -40));
     shape(ctx, g, 2.5);
     rr(ctx, -9, -8, 18, 4, 2); shape(ctx, tier === 2 ? '#c09a48' : tier === 3 ? '#d4dbe6' : '#7a5a36', 2);
     rr(ctx, -2.5, -4, 5, 10, 2); shape(ctx, '#4a3424', 2);
     if (tier === 3) glow(ctx, 0, -6 - len / 2, 18, '150,215,255', time);
   }
-  ctx.restore();
 }
 
 function bow(ctx, tier, h, time) {
+  ctx.save();
+  ctx.translate(h.x + 3, h.y - 6);
+  bowShape(ctx, tier, time);
+  ctx.restore();
+}
+
+// Bogen mit der Mitte im Ursprung
+function bowShape(ctx, tier, time) {
   const wood = ['', '#8e5e2e', '#6e421e', '#e2e4ee', '#efe6cc'][tier];
   const half = tier >= 2 ? 40 : 32;
   const bend = tier >= 2 ? 16 : 13;
-  ctx.save();
-  ctx.translate(h.x + 3, h.y - 6);
   ctx.strokeStyle = tier >= 3 ? '#ffffff' : '#e6dcc0'; ctx.lineWidth = 1.5;
   ctx.beginPath(); ctx.moveTo(0, -half); ctx.lineTo(0, half); ctx.stroke();
   ctx.lineCap = 'round';
@@ -430,13 +616,18 @@ function bow(ctx, tier, h, time) {
   ctx.strokeStyle = wood; ctx.lineWidth = 4.5; ctx.stroke();
   if (tier === 4) { ctx.fillStyle = '#c8473a'; ellipse(ctx, 0, -half, 3.5, 3.5); ctx.fill(); ellipse(ctx, 0, half, 3.5, 3.5); ctx.fill(); }
   if (tier === 3) glow(ctx, bend, 0, 20, '220,230,255', time);
-  ctx.restore();
 }
 
 function staff(ctx, tier, h, time) {
-  const wood = ['', '#7e5a36', '#4e3626', '#c8d0de', '#efe6cc'][tier];
   ctx.save();
   ctx.translate(h.x + 1, 0);
+  staffShape(ctx, tier, time);
+  ctx.restore();
+}
+
+// Stab mit dem Fuß im Ursprung
+function staffShape(ctx, tier, time) {
+  const wood = ['', '#7e5a36', '#4e3626', '#c8d0de', '#efe6cc'][tier];
   capsule(ctx, 0, -2, 0, -96, 4, wood);
   const top = -100;
   if (tier === 1) {
@@ -457,7 +648,12 @@ function staff(ctx, tier, h, time) {
     for (const s of [-1, 1]) { ctx.beginPath(); ctx.moveTo(s * 4, top + 6); ctx.quadraticCurveTo(s * 14, top - 2, s * 9, top - 12); ctx.strokeStyle = '#efe6cc'; ctx.lineWidth = 3; ctx.stroke(); }
     glow(ctx, 0, top - 2, 26, '200,120,255', time);
   }
-  ctx.restore();
+}
+
+function mixHex(a, b, t) {
+  const pa = parseInt(a.slice(1), 16), pb = parseInt(b.slice(1), 16);
+  const c = (sh) => Math.round(((pa >> sh) & 255) * (1 - t) + ((pb >> sh) & 255) * t);
+  return `#${((1 << 24) | (c(16) << 16) | (c(8) << 8) | c(0)).toString(16).slice(1)}`;
 }
 
 // Großes Porträt für die Heldenkarten
@@ -470,5 +666,5 @@ export function renderPortrait(canvas, hero, time = 0) {
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   const size = canvas.height * 0.66;
-  drawHero(ctx, hero, canvas.width * 0.4, canvas.height * 0.94, { time, injured: hero.state === 'injured', size });
+  drawHero(ctx, hero, canvas.width * 0.4, canvas.height * 0.94, { ...heroLook(hero), time, size });
 }
