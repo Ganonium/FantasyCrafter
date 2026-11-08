@@ -1,4 +1,4 @@
-# GitLab Pages: Bei jedem Push auf main wird das Spiel unter https://ganonium.gitlab.io/fantasycrafter/ veröffentlicht.
+# GitLab Pages: Bei jedem Push auf main wird das Spiel unter https://fantasycrafter-f1aa1b.gitlab.io/ veröffentlicht.
 # Kein Build-Schritt nötig – die Spieldateien werden nur nach public/ kopiert.
 pages:
   stage: deploy

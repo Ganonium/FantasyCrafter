@@ -6,7 +6,7 @@ den Drachen wagen. Details stehen in [KONZEPT.md](KONZEPT.md).
 
 ## Spielen
 
-- Online über GitLab Pages: <https://ganonium.gitlab.io/fantasycrafter/>. Jeder Push auf `main` veröffentlicht
+- Online über GitLab Pages: <https://fantasycrafter-f1aa1b.gitlab.io/>. Jeder Push auf `main` veröffentlicht
   automatisch (siehe `.gitlab-ci.yml`).
 - Lokal: einen beliebigen statischen Server im Ordner starten, z. B. `python3 -m http.server`, dann
   <http://localhost:8000> öffnen. Über `file://` funktioniert es wegen der ES-Module nicht.
