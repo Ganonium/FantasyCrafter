@@ -1,12 +1,13 @@
 // Einstieg: Laden/Speichern, Offline-Nachberechnung, Spielschleife.
 
-import { newGame, advance, building, skipTime, syncClock } from './sim.js';
+import { newGame, advance, skipTime, syncClock } from './sim.js';
 import { loadGame, saveGame, clearSave, exportCode, importCode } from './save.js';
 import { VillageScene } from './scene.js';
 import { UI } from './ui.js';
 
 // Für die „echte“ Version 1; zum Testen in den Einstellungen oder per ?speed=60 erhöhen.
 const DEFAULT_SPEED = 1;
+const OFFLINE_CAP = 24 * 60; // so viele Spielminuten Abwesenheit werden höchstens nachgerechnet
 const OFFLINE_REPORT_MIN = 10; // ab so vielen Spielminuten Abwesenheit gibt es einen Bericht
 
 const params = new URLSearchParams(location.search);
@@ -65,19 +66,19 @@ const ui = new UI(game);
 document.getElementById('settings').addEventListener('click', () => ui.showSettings());
 document.getElementById('speed').addEventListener('click', () => ui.showSettings());
 
-// Verpasste Zeit nachrechnen (begrenzt durch das Lagerhaus) und Bericht zeigen
+// Verpasste Zeit nachrechnen (höchstens OFFLINE_CAP) und Bericht zeigen
 function catchUp(realMs) {
   const s = game.state;
   const exact = (realMs / 60000) * game.speed + game.acc;
   const wanted = Math.floor(exact);
   game.acc = exact - wanted; // angefangene Minuten nicht verlieren
-  const cap = building(s, 'lager').offline;
+  const cap = OFFLINE_CAP;
   const minutes = Math.min(wanted, cap);
   game.simAt = Date.now();
   if (minutes <= 0) return;
   const before = { t: s.t, gold: s.gold, sold: s.stats.sold, adventures: s.stats.adventures, successes: s.stats.successes, crafted: s.stats.crafted };
   advance(s, minutes);
-  // Was über das Lagerhaus-Limit hinausgeht, vergeht ohne Simulation – die Uhr läuft trotzdem weiter
+  // Was über die Obergrenze hinausgeht, vergeht ohne Simulation – die Uhr läuft trotzdem weiter
   if (wanted > cap) skipTime(s, wanted - cap);
   if (game.speed === 1) syncClock(s, realClockMinute());
   scene.sync(s);

@@ -70,7 +70,7 @@ function moodIcon(m) {
 function heroState(s, h) {
   if (h.state === 'away') return `unterwegs: ${AREAS[h.area].icon} ${AREAS[h.area].name} · zurück in ca. ${fmtDuration(h.until - s.t)}`;
   if (h.state === 'rest') return `ruht sich aus (noch ${fmtDuration(h.until - s.t)})`;
-  if (h.state === 'injured') return `verletzt 🩹 (noch ${fmtDuration(h.until - s.t)})`;
+  if (h.state === 'injured') return `${h.wound === 'light' ? 'leicht verletzt' : 'schwer verletzt'} 🩹 (noch ${fmtDuration(h.until - s.t)})`;
   return 'in der Taverne';
 }
 
@@ -242,7 +242,7 @@ export class UI {
       <p class="small dim">Helden kaufen selbst, sobald sie das nötige Gold haben. Geizige wollen danach noch einen
       Notgroschen übrig haben. 🌟 = genau das wünscht sich jemand.</p>
       ${rows || '<p class="dim">Das Regal ist leer. Ab in die Werkstatt!</p>'}</section>
-      <section><h2>Einnahmen</h2><div class="small">Verkauft: ${s.stats.sold} Waren · Reparaturen: ${s.stats.repairs ?? 0} 🪙 · gesamt ${s.stats.earned} 🪙</div></section>`;
+      <section><h2>Einnahmen</h2><div class="small">Verkauft: ${s.stats.sold} Waren · gesamt ${s.stats.earned} 🪙</div></section>`;
   }
 
   tab_auftraege(s) {
@@ -311,7 +311,6 @@ export class UI {
   }
 
   orderMark(s, recipe) {
-    if (RECIPES[recipe].payout) return ' <span title="Ereignis-Ware, wird direkt verkauft">📯</span>';
     return s.orders.some((o) => o.state === 'active' && o.lines.some((l) => l.recipe === recipe && l.filled < l.qty)) ? ' <span title="für eine Bestellung">🧾</span>' : '';
   }
 
@@ -507,6 +506,7 @@ export class UI {
     if (pupil) out.push(`🎓 Lehrmeister von ${esc(pupil.name)}`);
     if (h.debt) out.push(`💰 Schuldet dir ${h.debt.amount} Gold`);
     if ((h.challengeUntil ?? 0) > s.t) out.push('💢 Im Wettstreit mit einem Rivalen');
+    if ((h.boldUntil ?? 0) > s.t) out.push('📣 Beflügelt von der eigenen Geschichte');
     return out.map((t) => `<div class="small status">${t}</div>`).join('');
   }
 
@@ -549,7 +549,7 @@ export class UI {
     const list = entries.slice(0, 80).map((e) => `<div class="entry k-${e.kind}"><span class="time">${fmtClock(logClock(s, e).minute)}</span>
       <span class="ico">${KIND_ICON[e.kind] ?? '•'}</span><span class="txt">${rich(e.text)}</span></div>`).join('');
     this.openModal(`<h2>Während du fort warst …</h2>
-      <p class="small dim">${fmtDuration(minutes)} Spielzeit vergangen${info.capped ? ` (begrenzt durch das Lagerhaus)` : ''}.</p>
+      <p class="small dim">${fmtDuration(minutes)} Spielzeit vergangen${info.capped ? ' (mehr als ein Tag wird nicht nachgeholt)' : ''}.</p>
       <div class="stats"><div><b>${goldDiff >= 0 ? '+' : ''}${goldDiff}</b>🪙 Gold</div><div><b>${sold}</b>verkauft</div>
       <div><b>${succ}/${adv}</b>Abenteuer</div></div>
       ${this.summaryHtml(s, before, entries)}
@@ -612,14 +612,6 @@ export class UI {
       if (cost.gold) parts.push(`${cost.gold} 🪙`);
       for (const [m, n] of Object.entries(cost.mats ?? {})) parts.push(`${n}× ${MATERIALS[m].icon}`);
       if (cost.potion) parts.push(`${cost.potion}× Heiltrank aus dem Regal`);
-      if (cost.craft) {
-        const rc = RECIPES[cost.craft];
-        const buy = craftCost(s, cost.craft);
-        const lacking = missingRare(s, cost.craft);
-        parts.push(`${matList(s, rc.mats)}${buy ? ` · ${buy} 🪙 beim Händler` : ' aus dem Lager'} · ${fmtDuration(craftTime(s, cost.craft))} Werkplatz`);
-        if (s.queue.length >= 10) parts.push('Warteschlange voll');
-        if (lacking.length) parts.push(`${lacking.map((m) => MATERIALS[m].name).join(', ')} fehlt`);
-      }
       const ok = canPay(s, cost);
       return `<button class="option" data-act="choose" data-i="${i}" ${ok ? '' : 'disabled'}>
         <b>${esc(val(o.label))}</b>${parts.length ? `<span class="cost">${parts.join(' · ')}</span>` : ''}

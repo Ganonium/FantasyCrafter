@@ -40,7 +40,7 @@ function botVisit() {
     }
   }
   for (const id of Object.keys(PROJECTS)) if (s.gold > PROJECTS[id].cost + 300) buildProject(s, id);
-  for (const id of ['schmiede', 'laden', 'taverne', 'lager']) if (canUpgrade(s, id) && s.gold > 150) upgrade(s, id);
+  for (const id of ['schmiede', 'laden', 'taverne']) if (canUpgrade(s, id) && s.gold > 150) upgrade(s, id);
   const next = upgradeCost(s, 'schmiede');
   for (const [m, n] of Object.entries(next ?? {})) {
     if (m !== 'gold' && s.mats[m] < n && !s.bounties.some((b) => b.mat === m) && s.gold > 150) {

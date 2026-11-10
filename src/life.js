@@ -68,7 +68,7 @@ export function growTrait(s, r, h, trait, reason, you = false) {
   traits.push(trait);
   h.traits = traits;
   h.grown = [...(h.grown ?? []).filter((t) => traits.includes(t)), trait];
-  const tpl = r.pick(GROWTH_TEXT[trait]);
+  const tpl = r.pick(GROWTH_TEXT[trait] ?? [`{n} hat sich verändert: {er} ist jetzt ${traitName(trait).toLowerCase()}.`]);
   log(s, 'growth', `🌱 ${fmt(tpl, h, { derselbe: h.female ? 'dieselbe' : 'derselbe' })}`, h.id, { trait, lost });
   const was = lost.length ? ` statt ${lost.map((t) => traitName(t).toLowerCase()).join(' und ')}` : '';
   bio(s, h, '🌱', `Wurde ${traitName(trait).toLowerCase()}${was} – ${reason}.`, you);

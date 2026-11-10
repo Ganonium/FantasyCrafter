@@ -111,15 +111,15 @@ export function findParty(s, r, h, soloBest) {
 
 // ---------- Persönliche Ziele ----------
 
-const GOAL_WEIGHTS = { gear: 40, area: 32, level: 10, gold: 10, bounty: 12 };
+const GOAL_WEIGHTS = { gear: 40, area: 32, bounty: 14 };
 
 function pickGoalType(r, h) {
   const w = { ...GOAL_WEIGHTS };
   if (h.traits.includes('ruhmsuechtig') || h.traits.includes('mutig')) w.area += 40;
-  if (h.traits.includes('gierig')) { w.bounty += 30; w.gold += 15; }
-  if (h.traits.includes('geizig')) w.gold += 40;
+  if (h.traits.includes('gierig')) w.bounty += 40;
+  if (h.traits.includes('geizig')) w.gear += 20;
   if (h.traits.includes('vorsichtig')) w.gear += 30;
-  if (h.traits.includes('eifrig')) w.level += 25;
+  if (h.traits.includes('eifrig')) w.area += 20;
   const total = Object.values(w).reduce((a, b) => a + b, 0);
   let roll = r() * total;
   return Object.keys(w).find((k) => (roll -= w[k]) < 0) ?? 'gear';
@@ -142,15 +142,8 @@ export function assignGoal(s, r, h) {
     const target = evals.find((e) => e.block === 'danger') ?? (h.successes ? null : evals[0]);
     if (target) { h.goal = { type: 'area', area: target.id, since: s.t }; return; }
   }
-  if (type === 'gold') {
-    h.goal = { type, amount: Math.round((Math.floor(h.gold) + 150 + h.level * 40) / 10) * 10, since: s.t };
-    return;
-  }
-  if (type === 'bounty') {
-    h.goal = { type, start: h.bountiesDone ?? 0, since: s.t };
-    return;
-  }
-  h.goal = { type: 'level', level: h.level + 2, since: s.t };
+  // sonst (oder wenn Ausrüstung und Gebiete ausgereizt sind): ein Kopfgeld kassieren
+  h.goal = { type: 'bounty', start: h.bountiesDone ?? 0, since: s.t };
 }
 
 // { text, cur, max, done }
@@ -170,11 +163,6 @@ export function goalProgress(s, h) {
       return { text: `${AREAS[g.area].name} bezwingen`, short: AREAS[g.area].name, cur: p, max: 100,
         done: (h.areaWins?.[g.area] ?? 0) > (g.wins0 ?? 0), unit: '% Chance' };
     }
-    case 'level':
-      return { text: `Stufe ${g.level} erreichen`, short: `Stufe ${g.level}`, cur: h.level, max: g.level, done: h.level >= g.level, unit: '' };
-    case 'gold':
-      return { text: `${g.amount} Gold ansparen`, short: `${g.amount} Gold`, cur: Math.min(Math.floor(h.gold), g.amount), max: g.amount,
-        done: h.gold >= g.amount, unit: '🪙' };
     case 'bounty':
       return { text: 'ein Kopfgeld kassieren', short: 'Kopfgeld', cur: (h.bountiesDone ?? 0) - g.start, max: 1,
         done: (h.bountiesDone ?? 0) > g.start, unit: '' };
@@ -192,8 +180,6 @@ export function goalThought(s, r, h) {
     const a = AREAS[g.area];
     return fmt(tpl, h, { A: a.name, zu: a.zu });
   }
-  if (g.type === 'level') return fmt(tpl, h, { x: g.level });
-  if (g.type === 'gold') return fmt(tpl, h, { x: g.amount });
   return fmt(tpl, h);
 }
 
@@ -210,7 +196,7 @@ export function checkHeroGoal(s, r, h) {
   }
   const p = goalProgress(s, h);
   if (!p?.done) return;
-  changeMood(h, 20);
+  changeMood(h, 14);
   s.reputation += 3;
   h.goalsDone = (h.goalsDone ?? 0) + 1;
   log(s, 'herogoal', fmt(say(s, r, 'heroGoalDone', T.heroGoalDone), h, { x: p.text }), h.id);
@@ -232,7 +218,6 @@ export function goalAreaBonus(h, areaId) {
 export function goalDrive(s, h) {
   const g = h.goal;
   if (!g) return 0;
-  if (g.type === 'gold' || g.type === 'level') return 0.1;
   if (g.type === 'gear' && h.gold < priceOf(s, g.recipe)) return 0.1;
   return 0;
 }

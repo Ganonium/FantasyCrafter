@@ -25,16 +25,6 @@ export const T = {
     'Der Hufschmied sieht {n} am Tor vorbeigehen – {zu}, wie es aussieht.',
     '{n} wirft eine Münze. Kopf. Also {zu}.',
   ],
-  departMorning: [
-    'Noch bevor der Hahn kräht, ist {n} schon unterwegs {zu}.',
-    'Im Morgennebel zieht {n} {zu}.',
-    '{n} schnappt sich ein Stück Brot vom Frühstückstisch und zieht {zu}.',
-  ],
-  departEvening: [
-    'Trotz der späten Stunde zieht {n} noch {zu}.',
-    'Im Abendrot macht sich {n} auf {zu}. „Nachts schlafen die Monster eh.“',
-    'Die Laternen werden angezündet, als {n} {zu} aufbricht.',
-  ],
   departBounty: [
     '{n} reißt einen Zettel vom Auftragsbrett und zieht {zu}. „{M}? Bring ich mit.“',
     'Das Kopfgeld auf {M} lässt {n} nicht los – {er} zieht {zu}.',
@@ -47,11 +37,6 @@ export const T = {
     '„Wenn ich nicht zurückkomme, gehört mein Bierkrug dir“, sagt {n} und zieht {zu}.',
     '{n} küsst das Glücksamulett und zieht {zu}. Mutig – oder dumm.',
     'Der Wirt schüttelt den Kopf, als {n} {zu} aufbricht.',
-  ],
-  departTreasure: [
-    '{n} hat vom Schatz gehört und ist schon unterwegs {zu}.',
-    '„Ein Schatz? {In}? Ich bin dabei!“ – {n} zieht los.',
-    '{n} rennt fast {zu}. Das Gerücht hat {ihn} gepackt.',
   ],
   success: [
     '{n} kehrt {aus} zurück. Der Kampf gegen {F} war ein Kinderspiel.',
@@ -175,14 +160,6 @@ export const T = {
       '{n} dreht sich in {x} vor dem Spiegel. „Steht mir, oder?“',
     ],
   },
-  buyCheap: [
-    '{n} kauft {x} und kann {sein} Glück kaum fassen. „Zu dem Preis? Gekauft!“',
-    '{n} schlägt bei {x} sofort zu. „Ein Schnäppchen!“',
-  ],
-  buyExpensive: [
-    '{n} zahlt zähneknirschend für {x}. „Halsabschneider.“',
-    '{n} kauft {x}, murmelt aber etwas von „Raubrittern“.',
-  ],
   buyPotion: ['{n} steckt einen Heiltrank ein.', '{n} kauft vorsichtshalber einen Heiltrank.', '{n} lässt sich einen Heiltrank einpacken. „Man weiß ja nie.“'],
   deliver: [
     '{n} liefert {x} am Auftragsbrett ab und kassiert das Kopfgeld.',
@@ -261,7 +238,6 @@ export const T = {
     '🌟 {n} hat sich einen Traum erfüllt: {x}!',
     '🌟 Ein großer Tag für {n}: {x}. {Er} strahlt über das ganze Gesicht.',
   ],
-  craftDone: ['In der Schmiede ist {x} fertig geworden.'],
   shelfFull: ['{x} ist fertig, aber das Regal ist voll!'],
 };
 
@@ -270,13 +246,10 @@ export const THOUGHTS = {
   goal: {
     gear: ['Eines Tages trage ich {x}.', 'Ich spare auf {x}.', 'Mit {x} wäre ich unschlagbar.'],
     area: ['Irgendwann bezwinge ich {A}.', 'Eines Tages wage ich mich {zu}.'],
-    level: ['Stufe {x} – das ist mein Ziel.', 'Noch ein paar Abenteuer, dann bin ich Stufe {x}.'],
-    gold: ['{x} Gold zurücklegen, dann kauf ich mir ein Häuschen.', 'Jede Münze zählt. {x} Gold will ich zusammenhaben.'],
     bounty: ['Ich will endlich mal ein Kopfgeld kassieren.', 'Wenn da ein Kopfgeld hängt, bin ich dabei.'],
   },
   rivalAhead: ['Pah! {o} hält sich für was Besseres. Das kann ich auch.', '{o} schon wieder. Dem zeig ich\'s.'],
   friendHurt: ['Ich mach mir Sorgen um {o}.'],
-  competitor: ['Mal sehen, was der Händler am Markt so hat.'],
   night: ['Zzz …', 'Nachts zieht doch niemand los.', 'Morgen früh vielleicht.'],
   tooDangerous: [
     '{A}? Mit dieser Ausrüstung? Da bräuchte ich schon Besseres.',
@@ -299,7 +272,6 @@ export const THOUGHTS = {
   staying: ['{x}! Da bleib ich natürlich hier.', 'Heute nicht – {x}.'],
   away: ['Unterwegs {in}.'],
   wantItem: ['{x} wäre was für mich – aber {p} Gold hab ich nicht.'],
-  tooExpensive: ['{x} für {p} Gold? Wucher!', '{x} gefällt mir, aber nicht zu dem Preis.'],
   going: ['Los geht\'s – {zu}!', 'Ich zieh {zu}. Bis später!'],
   scar: ['{A}? Nach dem letzten Mal nur noch mit Heiltrank im Gepäck.', 'Ohne Heiltrank setz ich keinen Fuß mehr {zu}.'],
   grudge: ['Bei dem kauf ich so schnell nichts mehr.', 'Der Amboss? Nach allem, was war? Erst mal nicht.'],

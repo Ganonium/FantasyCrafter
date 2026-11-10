@@ -13,10 +13,10 @@ import {
   banter, changeRelation, friendsOf, rivalsOf, heroLeft, findParty, checkHeroGoal, goalAreaBonus, goalDrive, goalThought,
 } from './social.js';
 import { bio, bump, life, checkGrowth, growTrait, traitThreshold, traitDrive, moodBaseline } from './life.js';
-import { processRequests } from './requests.js';
-import { remember, scarredIn, freshScar, memoryThought, trustOf, changeTrust } from './memory.js';
+import { processRequests, offerLastItem } from './requests.js';
+import { remember, scarredIn, freshScar, memoryThought, trustOf, changeTrust, fadeTrust } from './memory.js';
 
-export const SAVE_VERSION = 2;
+export const SAVE_VERSION = 3;
 const LOG_LIMIT = 500;
 const NIGHT_START = 22 * 60;
 const NIGHT_END = 6 * 60;
@@ -33,7 +33,7 @@ export function newGame(seed = Date.now(), clockMinute = 8 * 60) {
     clock0: clockMinute,
     gold: 120,
     mats: Object.fromEntries(Object.keys(MATERIALS).map((m) => [m, 0])),
-    buildings: { schmiede: 1, laden: 1, taverne: 1, lager: 1 },
+    buildings: { schmiede: 1, laden: 1, taverne: 1 },
     slots: [null],
     queue: [],
     shelf: [],
@@ -45,7 +45,7 @@ export function newGame(seed = Date.now(), clockMinute = 8 * 60) {
     nextBanter: 120,
     reputation: 0,
     log: [],
-    stats: { sold: 0, earned: 0, repairs: 0, adventures: 0, successes: 0, crafted: 0 },
+    stats: { sold: 0, earned: 0, adventures: 0, successes: 0, crafted: 0 },
   };
   s.mats.eisen = 12; s.mats.holz = 10; s.mats.stoff = 8; s.mats.kraeuter = 6;
   addV2Fields(s);
@@ -78,8 +78,29 @@ function addV2Fields(s) {
   s.nextRequest ??= s.t + 240;
 }
 
+// Version 3: Lagerhaus, Reparaturen, Regenüberzüge und passive Heldenwünsche (Gold, Stufe) sind gestrichen
+function migrateV3(s) {
+  if (s.buildings.lager !== undefined) {
+    const refund = [0, 0, 200, 900][s.buildings.lager] ?? 0;
+    delete s.buildings.lager;
+    if (refund) {
+      s.gold += refund;
+      log(s, 'build', `📦 Das Lagerhaus wird nicht mehr gebraucht – was du verpasst, wird jetzt immer bis zu 24 Std. nachgeholt. Du bekommst ${refund} 🪙 für den Ausbau zurück.`);
+    }
+  }
+  delete s.stats.repairs;
+  s.queue = s.queue.filter((id) => RECIPES[id]);
+  s.slots = s.slots.map((j) => (j && RECIPES[j.recipe] ? j : null));
+  s.shelf = s.shelf.filter((it) => RECIPES[it.recipe]);
+  if (s.event && !EVENT_BY_ID[s.event.id]) s.event = null;
+  for (const h of s.heroes) {
+    if (h.goal && (h.goal.type === 'gold' || h.goal.type === 'level')) { h.goal = null; h.nextGoalAt = s.t; }
+  }
+}
+
 export function migrate(s) {
   addV2Fields(s);
+  if ((s.version ?? 1) < 3) migrateV3(s);
   for (const h of s.heroes) if (!h.bio) rebuildBio(s, h);
   s.version = SAVE_VERSION;
   return s;
@@ -115,7 +136,7 @@ export function logClock(s, e) {
   return { day: Math.floor(e.c / 1440) + 1, minute: ((e.c % 1440) + 1440) % 1440 };
 }
 
-// Zeit vergeht ohne Simulation (z. B. Abwesenheit länger als das Lagerhaus erlaubt)
+// Zeit vergeht ohne Simulation (Abwesenheit über die Obergrenze OFFLINE_CAP hinaus)
 export function skipTime(s, minutes) {
   s.clockOffset += minutes;
 }
@@ -242,10 +263,6 @@ export function xpNeeded(level) {
   return Math.round(30 * Math.pow(level, 1.8));
 }
 
-export function heroLabel(h) {
-  return `${h.name} (${className(h.cls, h.female)}, St. ${h.level})`;
-}
-
 function addHero(s, r, { cls, silent = false, level = 1 } = {}) {
   const female = r.chance(0.5);
   const used = new Set(s.heroes.map((h) => h.name.split(' ')[0]));
@@ -340,6 +357,7 @@ export function evaluateAreas(s, h, { power = heroPower(h) } = {}) {
     // Ein stärkerer Rivale stachelt an; Turnierruhm macht mutig; persönliche Ziele locken
     if (rivalAhead) threshold -= 0.06;
     if ((h.challengeUntil ?? 0) > s.t) threshold -= 0.12;
+    if ((h.boldUntil ?? 0) > s.t) threshold -= 0.08;
     threshold -= effectVal(s, 'courage');
     const goal = goalAreaBonus(h, id);
     threshold += goal.threshold;
@@ -381,11 +399,6 @@ function sellToHero(s, h, recipe, price, idx) {
 }
 
 function tryShopping(s, r, h) {
-  // Konkurrenz am Markt: Manchmal schaut sich ein Held lieber erst dort um
-  if (!r.chance(effectVal(s, 'buyChance'))) {
-    if (s.shelf.some((it) => RECIPES[it.recipe].cls === h.cls)) setThought(h, r.pick(THOUGHTS.competitor), '🛍️');
-    return false;
-  }
   // Wer dir etwas nachträgt, kauft nur widerwillig bei dir
   if (trustOf(h) <= -30 && r.chance(0.4)) {
     if (s.shelf.some((it) => RECIPES[it.recipe].cls === h.cls)) setThought(h, r.pick(THOUGHTS.grudge), '😒');
@@ -405,6 +418,7 @@ function tryShopping(s, r, h) {
       const price = priceOf(s, it.recipe);
       if (!canAfford(h, price)) { refusal ??= fmt(THOUGHTS.wantItem[0], h, { x: it.rc.name, p: price }); continue; }
 
+      if (offerLastItem(s, r, h, it.recipe)) { setThought(h, fmt('{x} – das letzte Stück! Und ausgerechnet jetzt …', h, { x: it.rc.name }), '🛒'); break; }
       purchase(s, r, h, it.recipe, it.idx);
       bought = true;
       refusal = null;
@@ -422,12 +436,12 @@ function purchase(s, r, h, recipe, idx) {
   sellToHero(s, h, recipe, price, idx);
   s.reputation += rc.tier;
   h[rc.slot] = recipe;
-  changeMood(h, 8);
+  changeMood(h, 6);
   log(s, 'buy', fmt(say(s, r, 'buy.' + rc.slot, T.buy[rc.slot]), h, { x: `**${rc.name}**` }) + ` (+${price} 🪙)`, h.id);
   bio(s, h, '🛒', `Kaufte ${rc.name} bei dir.`, true);
   setThought(h, `${rc.name}! Das muss ich gleich ausprobieren.`, '✨');
   // Gute Ware schafft Vertrauen – aber nur bis zu einem gewissen Grad
-  if (trustOf(h) < 30) changeTrust(h, 2);
+  if (trustOf(h) < 20) changeTrust(h, 1);
   // Der Rivale sieht das gar nicht gern
   for (const o of rivalsOf(s, h)) setThought(o, fmt(r.pick(THOUGHTS.rivalAhead), o, { o: h.name }), '💢');
 }
@@ -682,7 +696,7 @@ function returnHome(s, r, h, opts = {}) {
       h.tale = { area: h.area, t: s.t, kind: 'first' };
     } else if (roll > h.chance - 0.1 && a.danger >= 9) h.tale = { area: h.area, t: s.t, kind: 'close' };
     // Wer dir vertraut, denkt unterwegs an dich
-    if (a.mat && trustOf(h) >= 40 && r.chance(0.15)) {
+    if (a.mat && trustOf(h) >= 50 && r.chance(0.05)) {
       s.mats[a.mat] += 1;
       log(s, 'gift', fmt('🎁 {n} hat dir {aus} etwas mitgebracht: {M}. „Für dich. Einfach so.“', h, v), h.id, { mat: a.mat });
       bio(s, h, '🎁', `Brachte dir ${a.aus} ${MATERIALS[a.mat].name} mit.`, true);
@@ -692,7 +706,7 @@ function returnHome(s, r, h, opts = {}) {
     // Siege lassen alte Niederlagen verblassen
     life(h).heavyDefeats = Math.max(0, (life(h).heavyDefeats ?? 0) - 0.5);
     s.reputation += 1;
-    changeMood(h, 8 + (h.fav === h.area ? 4 : 0));
+    changeMood(h, 4 + (h.fav === h.area ? 3 : 0));
     const tpl = roll > h.chance - 0.1 ? say(s, r, 'successClose', T.successClose) : say(s, r, 'success', T.success);
     if (notable) log(s, 'success', fmt(tpl, h, v) + ` (+${gold} 🪙)`, h.id);
     // manchmal ein kleiner Nachsatz passend zum Wesen
@@ -710,8 +724,10 @@ function returnHome(s, r, h, opts = {}) {
     bio(s, h, '🧪', `Dein Heiltrank rettete ${h.female ? 'ihr' : 'ihm'} ${a.in} das Leben.`, true);
     remember(s, h, 'saved', { area: h.area });
     if (!opts.quiet) log(s, 'escape', fmt(say(s, r, 'escape', T.escape), h, v), h.id);
-    h.state = 'rest';
-    h.until = s.t + Math.round((40 + a.time * 0.3) * effectVal(s, 'rest'));
+    // Der Heiltrank verhindert das Schlimmste – ein paar Schrammen und Prellungen bleiben
+    h.state = 'injured';
+    h.wound = 'light';
+    h.until = s.t + Math.round((60 + a.time * 0.5) * effectVal(s, 'injury') * (has(h, 'abgehaertet') ? 0.6 : 1));
   } else {
     xp = Math.round(a.danger * 0.8);
     const lost = Math.round(h.gold * 0.15);
@@ -738,6 +754,7 @@ function returnHome(s, r, h, opts = {}) {
       remember(s, h, 'gearBroke', { area: h.area, item: name, slot });
     }
     h.state = 'injured';
+    h.wound = 'heavy';
     const base = (r.int(180, 360) + a.danger * 2) * effectVal(s, 'injury') * (has(h, 'abgehaertet') ? 0.6 : 1);
     h.until = s.t + Math.round(h.cls === 'krieger' ? base * 0.7 : base);
   }
@@ -776,15 +793,6 @@ function returnHome(s, r, h, opts = {}) {
     if (h.bountyTrip || s.bounties.some((b) => b.mat === a.mat)) deliverBounty(s, r, h, a.mat, pieces);
     // ungewollte Beute verkaufen Helden an den Hausierer
     else h.gold += pieces * Math.round(MATERIALS[a.mat].value * 0.3);
-  }
-  // Verschleiß: Helden lassen ihre Ausrüstung in deiner Schmiede reparieren
-  const gearTier = (h.weapon ? RECIPES[h.weapon].tier : 0) + (h.armor ? RECIPES[h.armor].tier : 0);
-  const repair = Math.min(h.gold, Math.round(gearTier * (success ? 1 : 3) * (1 + a.danger / 60)));
-  if (repair > 0) {
-    h.gold -= repair;
-    s.gold += repair;
-    s.stats.earned += repair;
-    s.stats.repairs += repair;
   }
   // Taverne kostet
   const tavern = Math.min(h.gold, 4 + h.level * 2);
@@ -856,14 +864,14 @@ export function canCraft(s, recipeId) {
   return missingRare(s, recipeId).length === 0 && s.gold >= craftCost(s, recipeId);
 }
 
-export function queueCraft(s, recipeId, { front = false } = {}) {
+export function queueCraft(s, recipeId) {
   if (!canCraft(s, recipeId) || s.queue.length >= 10) return false;
   for (const [m, n] of Object.entries(RECIPES[recipeId].mats)) {
     const missing = Math.max(0, n - s.mats[m]);
     if (missing) buyMaterial(s, m, missing);
   }
   for (const [m, n] of Object.entries(RECIPES[recipeId].mats)) s.mats[m] -= n;
-  if (front) s.queue.unshift(recipeId); else s.queue.push(recipeId);
+  s.queue.push(recipeId);
   fillSlots(s);
   return true;
 }
@@ -902,11 +910,6 @@ function processCrafting(s) {
   for (let i = 0; i < s.slots.length; i++) {
     const job = s.slots[i];
     if (!job || job.end > s.t) continue;
-    if (RECIPES[job.recipe].payout) {
-      deliverEventGoods(s, job.recipe);
-      s.slots[i] = null;
-      continue;
-    }
     if (routeToOrder(s, job.recipe)) {
       s.stats.crafted++;
       s.slots[i] = null;
@@ -921,24 +924,6 @@ function processCrafting(s) {
     s.slots[i] = null;
   }
   fillSlots(s);
-}
-
-// Ereignis-Ware geht nicht ins Regal, sondern wird sofort an die Helden verkauft
-function deliverEventGoods(s, recipeId) {
-  const rc = RECIPES[recipeId];
-  const p = rc.payout;
-  const inTime = !p.effect || activeEffects(s).some((e) => e.tag === p.effect);
-  const gold = inTime ? p.gold : Math.round(p.gold / 2);
-  s.gold += gold;
-  s.stats.earned += gold;
-  s.stats.crafted++;
-  if (inTime) {
-    s.reputation += p.rep ?? 0;
-    for (const h of s.heroes) changeMood(h, p.mood ?? 0);
-    log(s, 'event', `🌧️ Deine **${rc.name}** gehen weg wie warme Semmeln. (+${gold} 🪙)`);
-  } else {
-    log(s, 'event', `🌧️ Die **${rc.name}** sind fertig – aber der Regen ist schon vorbei. Nur wenige greifen noch zu. (+${gold} 🪙)`);
-  }
 }
 
 export function buyMaterial(s, mat, n) {
@@ -996,7 +981,7 @@ const CLIENTS = [
 function generateOrder(s, r) {
   const client = r.pick(CLIENTS);
   const maxTier = building(s, 'schmiede').tier;
-  let pool = Object.keys(RECIPES).filter((id) => RECIPES[id].tier <= maxTier && RECIPES[id].slot !== 'event');
+  let pool = Object.keys(RECIPES).filter((id) => RECIPES[id].tier <= maxTier);
   if (client.prefer === 'potion') pool = ['heiltrank'];
   else if (client.prefer) pool = pool.filter((id) => RECIPES[id].cls === client.prefer || id === 'heiltrank');
   // eher die aktuell höchste und die einfachste Stufe
@@ -1028,7 +1013,6 @@ export function acceptOrder(s, id) {
   if (!o) return false;
   o.state = 'active';
   o.deadline = s.t + o.duration;
-  log(s, 'order', `${o.icon} Du nimmst die Bestellung von **${o.client}** an.`);
   fillOrderFromShelf(s, id);
   return true;
 }
@@ -1037,7 +1021,6 @@ export function declineOrder(s, id) {
   const o = s.orders.find((x) => x.id === id && x.state === 'offered');
   if (!o) return;
   s.orders = s.orders.filter((x) => x !== o);
-  log(s, 'order', `${o.icon} Du lehnst die Bestellung von **${o.client}** ab.`);
 }
 
 function orderNeeds(o, recipe) {
@@ -1121,7 +1104,6 @@ export function eventCost(s, ev, opt) {
 }
 
 export function canPay(s, cost) {
-  if (cost.craft && (!canCraft(s, cost.craft) || s.queue.length >= 10)) return false;
   if (cost.gold && s.gold < cost.gold) return false;
   if (cost.potion && s.shelf.filter((x) => x.recipe === 'heiltrank').length < cost.potion) return false;
   for (const [m, n] of Object.entries(cost.mats ?? {})) if (s.mats[m] < n) return false;
@@ -1129,7 +1111,6 @@ export function canPay(s, cost) {
 }
 
 function pay(s, cost) {
-  if (cost.craft) queueCraft(s, cost.craft, { front: true });
   if (cost.gold) s.gold -= cost.gold;
   for (const [m, n] of Object.entries(cost.mats ?? {})) s.mats[m] -= n;
   for (let i = 0; i < (cost.potion ?? 0); i++) s.shelf.splice(s.shelf.findIndex((x) => x.recipe === 'heiltrank'), 1);
@@ -1249,15 +1230,18 @@ function stepMinute(s, r) {
 
     // Laune pendelt langsam zur Mitte; gesellige Helden genießen die Taverne
     if (s.t % 60 === 0) {
+      // Hochgefühl und Tiefs verfliegen: je weiter weg von der Mitte, desto schneller
       const [low, high] = moodBaseline(h);
-      if (h.mood < low) changeMood(h, 1);
-      else if (h.mood > high) changeMood(h, -1);
+      if (h.mood < low) changeMood(h, Math.ceil((low - h.mood) / 12));
+      else if (h.mood > high) changeMood(h, -Math.ceil((h.mood - high) / 6));
       if (h.state !== 'away') {
-        if (has(h, 'gesellig')) changeMood(h, 1);
         changeMood(h, effectVal(s, 'moodHour'));
-        // Mit Freunden in der Taverne ist es gemütlicher
-        if (friendsOf(s, h).some((f) => f.state !== 'away')) changeMood(h, 1);
+        // Gesellige und Helden mit Freunden in der Taverne halten sich besser bei Laune
+        const cozy = has(h, 'gesellig') || friendsOf(s, h).some((f) => f.state !== 'away');
+        if (cozy && h.mood < high + 12) changeMood(h, 1);
       }
+      // Vertrauen verblasst ohne neue Erlebnisse langsam (einmal am Tag)
+      if (s.t % 1440 === 0) fadeTrust(h);
       if (h.mood < 15) {
         h.lowMoodSince ??= s.t;
         if (s.t - h.lowMoodSince > 24 * 60) {

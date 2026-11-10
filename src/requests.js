@@ -10,14 +10,14 @@
 
 import { AREAS, RECIPES } from './data.js';
 import { fmt } from './text.js';
-import { log, changeMood, evaluateAreas, priceOf, canAfford, buyItem, giveItem, clockOf, isNight } from './sim.js';
+import { log, changeMood, evaluateAreas, priceOf, canAfford, buyItem, giveItem, isNight } from './sim.js';
 import { relation, changeRelation } from './social.js';
 import { bio, bump } from './life.js';
 import { remember, recall, trustOf, changeTrust } from './memory.js';
 import { makeRng } from './rng.js';
 
 const H = 60;
-const WAIT = 10 * H;
+const WAIT = 12 * H;
 const MAX_WAITING = 3;
 const hero = (s, id) => s.heroes.find((h) => h.id === id);
 const inVillage = (h) => h && h.state !== 'away';
@@ -178,9 +178,9 @@ export const REQUESTS = {
       const pairs = [];
       const here = s.heroes.filter(inVillage);
       for (const young of here) {
-        if (young.mentor || young.level > 4) continue;
+        if (young.mentor || young.level > 5) continue;
         for (const vet of here) {
-          if (vet === young || vet.level < young.level + 4 || s.heroes.some((x) => x.mentor === vet.id)) continue;
+          if (vet === young || vet.level < young.level + 3 || s.heroes.some((x) => x.mentor === vet.id)) continue;
           if (relation(s, young, vet) < -10) continue;
           pairs.push({ hero: young.id, other: vet.id });
         }
@@ -219,9 +219,10 @@ export const REQUESTS = {
   thanks: {
     icon: '💛', title: 'Ein Dankeschön',
     find(s, r) {
+      if (s.t - (s.lastThanksAt ?? -99999) < 20 * H) return null; // Dank bleibt etwas Besonderes
       const options = [];
       for (const h of s.heroes) {
-        if (!inVillage(h) || h.state === 'injured' || trustOf(h) < 5 || s.t - (h.lastThanks ?? -9999) < 36 * H) continue;
+        if (!inVillage(h) || h.state === 'injured' || trustOf(h) < 5 || s.t - (h.lastThanks ?? -99999) < 4 * 24 * H) continue;
         for (const type of ['saved', 'goodAdvice', 'firstWin']) {
           const m = recall(h, type, (x) => !x.thanked);
           if (m) options.push({ hero: h.id, mem: type, area: m.area, item: m.item ?? null });
@@ -238,7 +239,7 @@ export const REQUESTS = {
     },
     options: (s, d) => {
       const h = hero(s, d.hero);
-      const done = () => { const m = recall(h, d.mem, (x) => !x.thanked); if (m) m.thanked = true; h.lastThanks = s.t; };
+      const done = () => { const m = recall(h, d.mem, (x) => !x.thanked); if (m) m.thanked = true; h.lastThanks = s.t; s.lastThanksAt = s.t; };
       return [
         {
           label: '„Dafür bin ich da.“', desc: `${first(h)} geht mit einem guten Gefühl. Euer Verhältnis wächst.`,
@@ -263,18 +264,7 @@ export const REQUESTS = {
   // Zwei wollen dasselbe letzte Stück
   lastItem: {
     icon: '⚖️', title: 'Das letzte Stück',
-    find(s, r) {
-      const options = [];
-      const here = s.heroes.filter(inVillage);
-      for (const it of s.shelf) {
-        const rc = RECIPES[it.recipe];
-        if (!rc.cls || s.shelf.filter((x) => x.recipe === it.recipe).length !== 1) continue;
-        const price = priceOf(s, it.recipe);
-        const want = here.filter((h) => h.cls === rc.cls && h.gold >= price && rc.tier > (h[rc.slot] ? RECIPES[h[rc.slot]].tier : 0));
-        if (want.length >= 2) { const [a, b] = want.sort(() => r() - 0.5); options.push({ hero: a.id, other: b.id, recipe: it.recipe }); }
-      }
-      return options.length ? r.pick(options) : null;
-    },
+    find: () => null, // entsteht im Moment des Kaufs, siehe offerLastItem
     valid: (s, d) => s.shelf.some((it) => it.recipe === d.recipe),
     text: (s, d) => fmt(`{n} und {o} greifen im selben Moment nach **${RECIPES[d.recipe].name}** – dem letzten Stück im Regal. ` +
       'Beide haben das Gold dabei. Beide schauen dich an.', hero(s, d.hero), { o: `**${hero(s, d.other).name}**` }),
@@ -298,44 +288,55 @@ export const REQUESTS = {
     },
   },
 
-  // Dein Rat ging schief – jetzt steht der Held vor dir
+  // Groll: Dein Rat ging schief, du hast jemanden übergangen oder abblitzen lassen – jetzt steht der Held vor dir
   grudge: {
     icon: '😠', title: 'Ein Wörtchen mit dir',
     find(s, r) {
       const options = [];
       for (const h of s.heroes) {
-        const m = inVillage(h) ? recall(h, 'badAdvice', (x) => !x.confronted) : null;
-        if (m) options.push({ hero: h.id, area: m.area });
+        if (!inVillage(h)) continue;
+        for (const type of ['badAdvice', 'passedOver', 'loanRefused']) {
+          const m = recall(h, type, (x) => !x.confronted);
+          if (m && (type === 'badAdvice' || trustOf(h) <= -8)) options.push({ hero: h.id, mem: type, area: m.area ?? null, item: m.item ?? null, other: null, rival: m.other ?? null });
+        }
       }
       return options.length ? r.pick(options) : null;
     },
     text: (s, d) => {
       const h = hero(s, d.hero);
-      return fmt(`{n} baut sich vor deinem Tresen auf${h.state === 'injured' ? ', den Arm noch in der Schlinge' : ''}: ` +
-        `„‚Du schaffst das‘, hast du gesagt. Ich hab dir geglaubt. Und dann lag ich ${AREAS[d.area].in} im Dreck.“`, h);
+      const mem = d.mem ?? 'badAdvice';
+      const said = mem === 'badAdvice' ? `„‚Du schaffst das‘, hast du gesagt. Ich hab dir geglaubt. Und dann lag ich ${AREAS[d.area].in} im Dreck.“`
+        : mem === 'passedOver' ? `„${d.item} hast du lieber ${d.rival} gegeben. Ich dachte, wir verstehen uns.“`
+        : '„Als ich dich um einen Vorschuss bat, hast du mich abblitzen lassen. Bei anderen bist du nicht so knauserig.“';
+      return fmt(`{n} baut sich vor deinem Tresen auf${h.state === 'injured' && h.wound !== 'light' ? ', den Arm noch in der Schlinge' : ''}: ${said}`, h);
     },
     options: (s, d) => {
       const h = hero(s, d.hero);
-      const done = () => { const m = recall(h, 'badAdvice', (x) => !x.confronted); if (m) m.confronted = true; };
+      const mem = d.mem ?? 'badAdvice';
+      const done = () => { const m = recall(h, mem, (x) => !x.confronted); if (m) m.confronted = true; };
       const tough = h.traits.some((t) => ['mutig', 'abgehaertet', 'ruhmsuechtig'].includes(t));
+      const advice = mem === 'badAdvice';
+      const hurt = advice && h.state === 'injured';
       return [
         {
-          label: 'Entschuldigen und den Heiler bezahlen', cost: { gold: 25 },
-          desc: `Das renkt viel wieder ein${h.state === 'injured' ? ` – und ${first(h)} ist schneller wieder auf den Beinen` : ''}.`,
+          label: advice ? 'Entschuldigen und den Heiler bezahlen' : 'Entschuldigen und einen ausgeben', cost: { gold: advice ? 25 : 15 },
+          desc: `Das renkt viel wieder ein${hurt ? ` – und ${first(h)} ist schneller wieder auf den Beinen` : ''}.`,
           apply: (s2) => {
             done(); remember(s2, h, 'apology'); changeMood(h, 8); bump(h, 'joy');
-            if (h.state === 'injured') h.until = Math.max(s2.t + 30, h.until - 90);
-            bio(s2, h, '✋', 'Du hast dich für deinen Rat entschuldigt und den Heiler bezahlt.', true);
-            return fmt('„Das war mein Fehler“, sagst du. {n} schweigt lange. Dann: „Na gut. Aber das nächste Mal überleg dir’s zweimal.“', h);
+            if (hurt) h.until = Math.max(s2.t + 30, h.until - 90);
+            bio(s2, h, '✋', advice ? 'Du hast dich für deinen Rat entschuldigt und den Heiler bezahlt.' : 'Du hast dich entschuldigt und einen ausgegeben.', true);
+            return fmt(advice ? '„Das war mein Fehler“, sagst du. {n} schweigt lange. Dann: „Na gut. Aber das nächste Mal überleg dir’s zweimal.“'
+              : '„Du hast recht, das war nicht fein von mir.“ Du stellst zwei Krüge auf den Tresen. {n} zögert – und setzt sich.', h);
           },
         },
         {
-          label: '„Es war deine Entscheidung.“', desc: tough ? `${first(h)} ist hart im Nehmen – das könnte sogar Eindruck machen.` : 'Stimmt zwar. Aber ob das jetzt hilft?',
+          label: advice ? '„Es war deine Entscheidung.“' : '„Geschäft ist Geschäft.“',
+          desc: tough ? `${first(h)} ist hart im Nehmen – das könnte sogar Eindruck machen.` : 'Stimmt zwar. Aber ob das jetzt hilft?',
           apply: (s2) => {
             done();
-            if (tough) { changeTrust(h, 6); return fmt('{n} starrt dich an – und lacht dann trocken. „Stimmt. War es.“', h); }
+            if (tough) { changeTrust(h, 6); return fmt('{n} starrt dich an – und lacht dann trocken. „Stimmt auch wieder.“', h); }
             remember(s2, h, 'brushedOff'); changeMood(h, -6); bump(h, 'bitterness');
-            bio(s2, h, '✋', 'Du hast die Schuld für deinen Rat von dir gewiesen.', true);
+            bio(s2, h, '✋', 'Du hast ' + (h.female ? 'sie' : 'ihn') + ' abblitzen lassen, als ' + (h.female ? 'sie' : 'er') + ' dich zur Rede stellte.', true);
             return fmt('{n} dreht sich wortlos um. Die Ladentür knallt.', h);
           },
         },
@@ -417,7 +418,7 @@ export const REQUESTS = {
           label: '„Erzähl mehr!“', desc: `${first(h)} fühlt sich bestärkt und wagt in den nächsten Stunden mehr.`,
           apply: (s2) => {
             h.tale = null; remember(s2, h, 'listened', { area: d.area }); changeMood(h, 6);
-            h.challengeUntil = Math.max(h.challengeUntil ?? 0, s2.t + 8 * H);
+            h.boldUntil = s2.t + 8 * H;
             return fmt('{n} erzählt mit Händen und Füßen. Am Ende steht der halbe Laden um euch herum.', h);
           },
         },
@@ -484,6 +485,27 @@ export const REQUESTS = {
 
 // ---------- Ablauf ----------
 
+// Kurz vor einem Kauf: Will noch jemand genau dieses letzte Stück? Dann landet der Fall bei dir am Tresen.
+// true = der Kauf wartet auf deine Entscheidung
+export function offerLastItem(s, r, a, recipe) {
+  const pending = s.requests.find((q) => q.type === 'lastItem');
+  if (pending) return pending.data.recipe === recipe; // das Stück ist zurückgelegt, bis du entschieden hast
+  const rc = RECIPES[recipe];
+  if (s.requests.length >= MAX_WAITING || s.t - (s.lastItemAt ?? -99999) < 24 * H) return false;
+  if (s.shelf.filter((it) => it.recipe === recipe).length !== 1) return false;
+  const waiting = new Set(s.requests.flatMap((q) => [q.data.hero, q.data.other]).filter(Boolean));
+  if (waiting.has(a.id)) return false;
+  const price = priceOf(s, recipe);
+  const others = s.heroes.filter((b) => b !== a && inVillage(b) && !waiting.has(b.id) && b.cls === rc.cls && b.gold >= price &&
+    rc.tier > (b[rc.slot] ? RECIPES[b[rc.slot]].tier : 0));
+  if (!others.length || !r.chance(0.6)) return false;
+  const b = r.pick(others);
+  s.requests.push({ type: 'lastItem', data: { hero: a.id, other: b.id, recipe }, t: s.t, expires: s.t + WAIT });
+  s.lastItemAt = s.t;
+  log(s, 'request', `⚖️ ${fmt('{n} und {o} wollen beide das letzte Stück {x}.', a, { o: `**${b.name}**`, x: `**${rc.name}**` })}`, a.id, { pending: true });
+  return true;
+}
+
 export function requestFor(s, heroId) {
   return s.requests.find((q) => q.data.hero === heroId) ?? null;
 }
@@ -520,8 +542,8 @@ export function processRequests(s, r) {
     if (!requestValid(s, q)) s.requests = s.requests.filter((x) => x !== q);
     else if (s.t >= q.expires) resolveRequest(s, q, requestOptions(s, q).length - 1, true, r);
   }
-  const { minute } = clockOf(s);
-  if (s.t < s.nextRequest || s.requests.length >= MAX_WAITING || isNight(s) || minute < 8 * 60 || minute >= 20 * 60) return;
+  // Besucher kommen den ganzen Tag über (6–22 Uhr) und warten bis in den nächsten Morgen
+  if (s.t < s.nextRequest || s.requests.length >= MAX_WAITING || isNight(s)) return;
   s.nextRequest = s.t + 60; // nichts Passendes? In einer Stunde wieder schauen
   const waiting = new Set(s.requests.flatMap((q) => [q.data.hero, q.data.other]).filter(Boolean));
   const taken = new Set(s.requests.map((q) => q.type));

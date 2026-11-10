@@ -3,7 +3,7 @@
 //
 // setup(s, r, api)      → data (wird im Spielstand gespeichert) – darf schon Effekte setzen
 // text(d)               → Beschreibung
-// options[].cost(s, d)  → { gold, mats: {}, potion, craft: rezeptId } (optional; craft = Ereignis-Ware in die Werkstatt)
+// options[].cost(s, d)  → { gold, mats: {}, potion } (optional)
 // options[].apply(s, r, api, d) → Ergebnistext für die Chronik
 
 import { MATERIALS, AREAS } from './data.js';
@@ -87,14 +87,12 @@ export const EVENTS = [
       api.addEffect({ label: 'Dauerregen', icon: '🌧️', dur: 10 * H, mods: [{ key: 'duration', v: 1.35 }, { key: 'moodHour', v: -1 }], tag: 'regen' });
       return {};
     },
-    text: () => 'Seit Stunden schüttet es. Abenteuer dauern länger, die Laune sinkt. In deiner Werkstatt könntest du ' +
-      'Regenüberzüge für die Ausrüstung der Helden nähen.',
+    text: () => 'Seit Stunden schüttet es. Abenteuer dauern länger, die Laune sinkt. Die Helden hocken mit nassen Stiefeln ' +
+      'in der Taverne und starren aus dem Fenster.',
     options: [
       {
-        label: 'Regenüberzüge nähen',
-        desc: 'Kommt vorne in die Warteschlange und belegt einen Werkplatz (45 Min.). Solange es regnet, zahlen die Helden 110 🪙, danach nur die Hälfte. Ruf +2.',
-        cost: () => ({ craft: 'regenueberzuege' }),
-        apply: () => 'Du legst den Stoff zurecht: Regenüberzüge kommen als Nächstes auf den Werktisch.',
+        label: 'Heißen Met ausschenken lassen', desc: 'Alle Helden Laune +10. Ruf +2.', cost: () => ({ gold: 30 }),
+        apply: (s, r, api) => { api.moodAll(10); s.reputation += 2; return 'Dampfende Krüge machen die Runde. Draußen prasselt es, drinnen wird gelacht.'; },
       },
       { label: 'Abwarten', apply: () => 'Du wartest, bis der Regen nachlässt.' },
     ],
@@ -274,23 +272,6 @@ export const EVENTS = [
         },
       },
       { label: 'Weiterziehen lassen', apply: () => 'Der Barde zieht mit seiner Laute weiter.' },
-    ],
-  },
-  {
-    id: 'konkurrenz', icon: '🛒', title: 'Konkurrenz am Markt', weight: 1,
-    cond: (s) => s.stats.sold >= 5,
-    setup(s, r, api) {
-      api.addEffect({ label: 'Konkurrenz', icon: '🛒', dur: 12 * H, mods: [{ key: 'buyChance', v: 0.5 }], tag: 'konkurrenz' });
-      return {};
-    },
-    text: () => 'Ein fahrender Waffenhändler baut am Markt seinen Stand auf. Viele Helden schauen jetzt erst einmal dort ' +
-      'vorbei, bevor sie bei dir kaufen.',
-    options: [
-      {
-        label: 'Ihn zum Weiterziehen bewegen', desc: 'Beendet die Konkurrenz sofort.', cost: () => ({ gold: 70 }),
-        apply: (s, r, api) => { api.removeEffect('konkurrenz'); return 'Ein Beutel Gold, und der Händler hat es plötzlich eilig.'; },
-      },
-      { label: 'Konkurrenz belebt das Geschäft', desc: '12 Std. lang kaufen die Helden nur halb so oft bei dir.', apply: () => 'Du lässt ihn gewähren. Soll er doch versuchen, mit deiner Ware mitzuhalten.' },
     ],
   },
 ];
