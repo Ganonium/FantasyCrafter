@@ -14,6 +14,8 @@ import { log, changeMood, evaluateAreas, priceOf, canAfford, buyItem, giveItem, 
 import { relation, changeRelation } from './social.js';
 import { bio, bump } from './life.js';
 import { remember, recall, trustOf, changeTrust } from './memory.js';
+import { ROLES, farewellMood, wantsToSettle, housePrice, settle, wander, leaveBitter, daysHere } from './farewell.js';
+import { loseTrait } from './life.js';
 import { makeRng } from './rng.js';
 
 const H = 60;
@@ -478,6 +480,116 @@ export const REQUESTS = {
         },
       });
       opts.push({ label: 'Leider nein', desc: 'Geschäft ist Geschäft.', apply: () => { changeMood(h, -2); changeTrust(h, -3); return fmt('{n} seufzt und bleibt vorerst im Dorf.', h); } });
+      return opts;
+    },
+  },
+
+  // Abschied: Ein Held hat genug erlebt. Bleibt er als Dorfbewohner, zieht er weiter – oder geht er im Groll?
+  farewell: {
+    icon: '🎒', title: 'Zeit für den Abschied',
+    find(s, r) {
+      // Das Dorf soll nie leer werden, und Abschiede bleiben besondere Momente
+      if (s.heroes.length < 4 || s.t - (s.lastFarewellAt ?? -99999) < 40 * H) return null;
+      const options = [];
+      for (const h of s.heroes) {
+        if (!inVillage(h) || h.state === 'injured') continue;
+        const mood = farewellMood(s, h);
+        if (mood) options.push({ hero: h.id, mood });
+      }
+      return options.length ? r.pick(options) : null;
+    },
+    text: (s, d) => {
+      const h = hero(s, d.hero);
+      const days = Math.round(daysHere(s, h));
+      if (d.mood === 'bitter') {
+        return fmt(`{n} legt den Zimmerschlüssel auf deinen Tresen. „${days} Tage Eichenfurt. Es reicht. Hier hält mich nichts mehr.“ ` +
+          '{Er} sieht dich an, als warte {er} darauf, dass du widersprichst.', h);
+      }
+      const role = ROLES[h.cls];
+      const dream = wantsToSettle(h)
+        ? `„Ehrlich gesagt … ich könnte mir vorstellen, hierzubleiben. Ein Häuschen am Dorfrand. Als ${role.name(h.female)} vielleicht.“`
+        : '„Die Straße ruft. Irgendwo da draußen gibt es Länder, die noch keiner von uns gesehen hat.“';
+      return fmt(d.mood === 'restless'
+        ? `{n} dreht nachdenklich einen Krug in den Händen: „${h.successes} Siege, Stufe ${h.level} – hier gibt es für mich nichts mehr zu beweisen.“ Dann, leiser: ${dream}`
+        : `{n} lehnt sich an deinen Tresen und lächelt: „Seit ${days} Tagen bin ich jetzt hier. Ich hab gefunden, was ich gesucht habe.“ Eine Pause. ${dream}`, h);
+    },
+    options: (s, d) => {
+      const h = hero(s, d.hero);
+      const name = first(h);
+      if (d.mood === 'bitter') {
+        return [
+          {
+            label: 'Aussprache bei einem guten Tropfen', cost: { gold: 50 },
+            desc: `Du nimmst dir Zeit. ${name} bleibt – und die Verbitterung könnte sich lösen.`,
+            apply: (s2) => {
+              loseTrait(s2, h, 'verbittert', '{n} hat sich den Kummer von der Seele geredet. Die Verbitterung ist verflogen.');
+              remember(s2, h, 'apology'); changeMood(h, 15);
+              h.farewellAfter = s2.t + 4 * 24 * H;
+              bio(s2, h, '✋', 'Wollte gehen – du hast ' + (h.female ? 'sie' : 'ihn') + ' zum Bleiben bewegt.', true);
+              return fmt('Ihr redet bis tief in die Nacht. Am Morgen hängt der Zimmerschlüssel wieder an {sein}em Gürtel.', h);
+            },
+          },
+          {
+            label: '„Dann geh.“', desc: `${name} verlässt Eichenfurt. Freunde werden das nicht gut aufnehmen.`,
+            apply: (s2, r) => { const t = fmt('{n} nickt, als hätte {er} nichts anderes erwartet.', h); leaveBitter(s2, r, h); return t; },
+          },
+        ];
+      }
+      const role = ROLES[h.cls];
+      const price = housePrice(h);
+      const missing = Math.max(0, price - Math.floor(h.gold));
+      // Wen die Ferne ruft, den hält nur echtes Vertrauen
+      const stays = wantsToSettle(h) || trustOf(h) >= (d.mood === 'restless' ? 40 : 20);
+      const opts = [
+        {
+          label: `„Bleib bei uns.“${missing ? ' – und du legst Gold fürs Haus dazu' : ''}`, cost: missing ? { gold: missing } : undefined,
+          desc: `${name} baut ein Häuschen (${price} Gold${missing ? `, davon ${missing} von dir` : ' aus eigener Tasche'}) und wird ${role.name(h.female)}: ${role.desc}` +
+            (stays ? '' : ` Aber ${name} zieht es in die Ferne – ob Zureden reicht?`),
+          apply: (s2, r) => {
+            if (!stays) {
+              if (missing) s2.gold += missing; // das Gold wird nicht gebraucht
+              const t = fmt('{n} lächelt und schüttelt den Kopf. „Lieb von dir. Aber ich muss sehen, was hinter den Bergen liegt.“', h);
+              wander(s2, r, h);
+              return t;
+            }
+            h.gold += missing;
+            const t = fmt(`{n} schlägt ein. „Abgemacht. Aber den ersten Krug im neuen Haus trinkst du mit mir.“ Eichenfurt hat ${h.female ? 'eine neue' : 'einen neuen'} ${role.name(h.female)}.`, h);
+            bio(s2, h, '🏡', 'Wurde auf dein Zureden hin in Eichenfurt sesshaft.', true);
+            settle(s2, r, h);
+            return t;
+          },
+        },
+        {
+          label: 'Ein Abschiedsfest ausrichten', cost: { gold: 60 },
+          desc: `${name} zieht in die Welt hinaus. Gute Laune für alle im Dorf, Ruf +12 – und wer dir vertraut, lässt etwas da.`,
+          apply: (s2, r) => {
+            const t = fmt('Musik, Met und viele Umarmungen. Am Morgen danach steht {n} mit geschnürtem Bündel am Tor und dreht sich noch einmal um.', h);
+            bio(s2, h, '🎉', 'Bekam von dir ein Abschiedsfest.', true);
+            wander(s2, r, h, { feast: true });
+            return t;
+          },
+        },
+      ];
+      if (!h.askedToStay) opts.push({
+        label: '„Bleib noch ein paar Tage.“', desc: `${name} verschiebt die Entscheidung um drei Tage. Das geht nur einmal.`,
+        apply: (s2) => {
+          h.askedToStay = true; h.farewellAfter = s2.t + 3 * 24 * H; changeMood(h, 3);
+          return fmt('„Na gut. Ein paar Tage noch.“ {n} bestellt sich einen Krug.', h);
+        },
+      });
+      opts.push({
+        label: '„Folge deinem Herzen.“', desc: wantsToSettle(h) && h.gold >= price ? `${name} entscheidet selbst – und liebäugelt mit einem Häuschen.` : `${name} entscheidet selbst – und wird wohl weiterziehen.`,
+        apply: (s2, r) => {
+          if (wantsToSettle(h) && h.gold >= price) {
+            const t = fmt(`{n} nickt langsam. „Dann bleib ich.“ Noch am selben Tag sucht {er} sich einen Bauplatz am Dorfrand.`, h);
+            settle(s2, r, h);
+            return t;
+          }
+          const t = fmt('{n} drückt dir fest die Hand. „Mach’s gut. Und halt mir einen Platz am Tresen frei.“', h);
+          wander(s2, r, h);
+          return t;
+        },
+      });
       return opts;
     },
   },

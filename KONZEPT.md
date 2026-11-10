@@ -39,7 +39,7 @@ Drachen traut, gibt es keine Drachenschuppen. Genauso fehlt die Spinnenseide, we
 | **Stufe + Ausrüstung → Kraft** | bestimmt die Erfolgschance pro Gebiet |
 | **Zwei Wesenszüge** | Mutig, Vorsichtig, Gierig, Faul, Eifrig, Ruhmsüchtig, Geizig, Spendabel, Gesellig |
 | **Lieblingsgebiet / verhasstes Gebiet** | „Spinnenhöhle? Nicht für alles Gold der Welt. Ich hasse Spinnen.“ |
-| **Laune** | steigt bei Erfolgen, Käufen, erfüllten Wünschen und mit Freunden in der Taverne, sinkt bei Verletzungen und Streit; wer lange schlecht gelaunt ist, verlässt das Dorf |
+| **Laune** | steigt bei Erfolgen, Käufen, erfüllten Wünschen und mit Freunden in der Taverne, sinkt bei Verletzungen und Streit; wer lange schlecht gelaunt ist, verlässt das Dorf im Groll |
 | **Wunsch** | ein persönliches Ziel: ein bestimmtes Ausrüstungsteil, ein Gebiet bezwingen oder ein Kopfgeld kassieren |
 | **Beziehungen** | Freunde (💛) und Rivalen (⚔️) entstehen im Tavernengeplauder und auf gemeinsamen Ausflügen |
 | **Tagesform** | jeden Tag neu ausgewürfelt; manche Tage hat einfach niemand Lust |
@@ -115,6 +115,29 @@ unter „Verhältnis zu dir“, woran sie sich erinnern. Erinnerungen tauchen al
 - **Wer dir vertraut** (ab 50), bringt dir selten seltene Materialien mit. **Wer dir etwas nachträgt** (ab −30),
   kauft nur widerwillig bei dir und fragt dich nicht mehr um Rat.
 
+## Kommen und Gehen
+
+Helden bleiben nicht ewig (`src/farewell.js`). Wer genug erlebt hat, kommt mit dem Abschied an deinen Tresen (🎒):
+
+- **Angekommen** (zufrieden, mindestens Stufe 8, mindestens 10 Tage im Dorf) oder **rastlos** (mindestens Stufe 10,
+  14 Tage, voll ausgerüstet oder mehrfacher Drachensieger). Höchstens ein Abschied alle 40 Stunden, nie bei weniger
+  als vier Helden.
+- **„Bleib bei uns.“**: Der Held baut ein Häuschen (300 + 80 je Stufe Gold aus eigener Tasche; fehlt etwas, kannst du es
+  dazulegen) und wird **Dorfbewohner**. Wen die Ferne ruft (ruhmsüchtig, eifrig), den hält nur echtes Vertrauen.
+- **Abschiedsfest** (60 Gold): Der Held zieht in die Welt hinaus; gute Laune im Dorf, Ruf +12.
+- **„Bleib noch ein paar Tage.“** (einmal, 3 Tage Aufschub) oder **„Folge deinem Herzen.“** (er entscheidet selbst).
+- Wer dir vertraut, lässt beim Fortgehen etwas da (Gold, ab Vertrauen 50 seltene Materialien).
+- **Verbitterte** (Vertrauen unter 10, mindestens 4 Tage) wollen im Groll gehen: Aussprache (50 Gold, die Verbitterung
+  löst sich) oder gehen lassen.
+
+**Dorfbewohner** haben eine Aufgabe mit dauerhaftem Nutzen (bis zu drei je Aufgabe zählen): Krieger werden Ausbilder
+(Helden lernen 10 % schneller, Neuankömmlinge eine Stufe höher), Waldläufer Kundschafter (alle Gebiete 4 % weniger
+gefährlich), Magier Kräuterkundige (Verletzungen heilen 10 %, Heiltränke brauen 15 % schneller). Sie stehen im
+Hintergrund der Dorfszene, geben manchmal Bestellungen auf und sind im Tab „Dorf“ aufgeführt.
+
+Die **Dorfchronik** (Tab „Dorf“) bewahrt jeden Helden, der einmal hier war: Stufe, Schicksal, Zeit im Dorf und die
+wichtigsten Seiten seines Heldenbuchs. Ein freies Zimmer zieht bald einen neuen Helden an.
+
 ## Gedankenblasen
 
 Über den Helden in der Dorfszene zeigt ein kleines Symbol, was sie gerade beschäftigt: 🛒 will etwas, das zu teuer ist,
@@ -183,7 +206,7 @@ Einträge in der Warteschlange lassen sich nach vorne schieben.
 
 ## Ziele und Dorfprojekte
 
-- **Ziele**: eine Kette von 15 Zielen (vom ersten Verkauf bis zum Helden in voller Drachenausrüstung) mit Belohnungen.
+- **Ziele**: eine Kette von 19 Zielen (vom ersten Verkauf über den Helden in voller Drachenausrüstung bis zur gefüllten Dorfchronik) mit Belohnungen.
   Das aktuelle Ziel steht oben in der Chronik und im Dorf-Tab.
 - **Dorfprojekte**: einmalige Gold-Investitionen mit dauerhaftem Bonus: Dorfbrunnen, Heilerhütte, Marktplatz,
   Wachturm, Bardenbühne, Heldendenkmal (250 bis 3.000 Gold).
@@ -230,7 +253,8 @@ wiederholt. Dazu kommen Varianten nach Tageszeit, Schatzjagd-Texte und Nachsätz
 
 ## Ideen für später
 
-- **Großes Ziel**: Drachensieg, Prestige (neues Dorf gründen, Bonus bleibt)
+- **Großes Ziel**: der Drache als einmaliges Finale, danach ein neues Kapitel (Dorfchronik bleibt)
+- **Wohin mit dem Gold**: Der Spieler häuft im späten Spiel viel Gold an, für das es noch kein Ziel gibt
 - **Weitere Quest-Arten**: Monsterjagd, Eskorte, Rettungsmission für einen verschollenen Helden
 - **Mehr Beziehungen**: Liebe, Lehrer und Schüler, Gruppen aus mehr als zwei Helden
 - **Mehr Ereignisse**: Drachenangriff aufs Dorf, Ketten-Ereignisse über mehrere Tage

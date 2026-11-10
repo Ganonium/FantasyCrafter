@@ -10,10 +10,11 @@ import { T, THOUGHTS, fmt } from './text.js';
 import { EVENTS, EVENT_BY_ID } from './events.js';
 import { GOALS, PROJECTS } from './goals.js';
 import {
-  banter, changeRelation, friendsOf, rivalsOf, heroLeft, findParty, checkHeroGoal, goalAreaBonus, goalDrive, goalThought,
+  banter, changeRelation, friendsOf, rivalsOf, findParty, checkHeroGoal, goalAreaBonus, goalDrive, goalThought,
 } from './social.js';
 import { bio, bump, life, checkGrowth, growTrait, traitThreshold, traitDrive, moodBaseline } from './life.js';
 import { processRequests, offerLastItem } from './requests.js';
+import { villagers, villagerMods, hasRole, leaveBitter, ROLES } from './farewell.js';
 import { remember, scarredIn, freshScar, memoryThought, trustOf, changeTrust, fadeTrust } from './memory.js';
 
 export const SAVE_VERSION = 3;
@@ -73,6 +74,7 @@ function addV2Fields(s) {
   s.guestDue ??= null;
   s.relations ??= {};
   // Besucher am Tresen: früher eine einzelne Bitte, jetzt eine kleine Warteschlange
+  s.legacy ??= [];
   s.requests ??= s.request ? [s.request] : [];
   delete s.request;
   s.nextRequest ??= s.t + 240;
@@ -198,6 +200,7 @@ export function effectVal(s, key, { area = null, mat = null } = {}) {
   };
   for (const e of s.effects) if (e.until > s.t) e.mods.forEach(apply);
   for (const id of Object.keys(s.projects)) PROJECTS[id].mods.forEach(apply);
+  villagerMods(s).forEach(apply);
   return v;
 }
 
@@ -781,7 +784,7 @@ function returnHome(s, r, h, opts = {}) {
   h.gold += gold;
   // Lehrlinge lernen schneller, solange ihr Lehrmeister da ist
   const mentor = h.mentor ? s.heroes.find((x) => x.id === h.mentor) : null;
-  h.xp += Math.round(xp * (mentor ? 1.6 : 1));
+  h.xp += Math.round(xp * (mentor ? 1.6 : 1) * effectVal(s, 'xp'));
   while (h.xp >= xpNeeded(h.level)) {
     h.xp -= xpNeeded(h.level);
     h.level++;
@@ -979,7 +982,12 @@ const CLIENTS = [
 ];
 
 function generateOrder(s, r) {
-  const client = r.pick(CLIENTS);
+  // Manchmal bestellt jemand aus dem Dorf: ein sesshaft gewordener Held
+  const locals = villagers(s);
+  const local = locals.length && r.chance(0.35) ? r.pick(locals) : null;
+  const client = local
+    ? { name: `${local.name}, ${ROLES[local.cls].name(local.female)}`, icon: '🏡', prefer: local.cls === 'magier' && r.chance(0.5) ? 'potion' : local.cls, intro: ROLES[local.cls].order }
+    : r.pick(CLIENTS);
   const maxTier = building(s, 'schmiede').tier;
   let pool = Object.keys(RECIPES).filter((id) => RECIPES[id].tier <= maxTier);
   if (client.prefer === 'potion') pool = ['heiltrank'];
@@ -1092,7 +1100,7 @@ function eventApi(s, r) {
     moodAll: (d) => { for (const h of s.heroes) changeMood(h, d); },
     addHero: (level) => {
       if (s.heroes.length >= building(s, 'taverne').heroes) return null;
-      const h = addHero(s, r, { level, silent: true });
+      const h = addHero(s, r, { level: Math.min(10, level), silent: true });
       bio(s, h, '✋', 'Lag verwundet am Wegesrand – du hast geholfen, und so blieb ' + (h.female ? 'sie' : 'er') + ' in Eichenfurt.', true);
       return h;
     },
@@ -1245,9 +1253,7 @@ function stepMinute(s, r) {
       if (h.mood < 15) {
         h.lowMoodSince ??= s.t;
         if (s.t - h.lowMoodSince > 24 * 60) {
-          log(s, 'leave', fmt(say(s, r, 'leave', T.leave), h), h.id);
-          s.heroes = s.heroes.filter((x) => x !== h);
-          heroLeft(s, r, h);
+          leaveBitter(s, r, h, 'left');
         }
       } else h.lowMoodSince = null;
     }
@@ -1260,7 +1266,8 @@ function stepMinute(s, r) {
     const due = s.guestDue !== null && s.t >= s.guestDue;
     if (s.heroes.length < cap && !isNight(s) && (due || r.chance(arrivalChance(s)))) {
       s.guestDue = null;
-      const lvl = Math.max(1, Math.min(8, 1 + Math.floor(Math.sqrt(s.reputation) / 3) + r.int(-1, 1)));
+      // Ein Ausbilder im Dorf zieht erfahrenere Leute an
+      const lvl = Math.max(1, Math.min(8, 1 + Math.floor(Math.sqrt(s.reputation) / 3) + r.int(-1, 1))) + (hasRole(s, 'krieger') ? 1 : 0);
       addHero(s, r, { level: lvl });
     }
   }

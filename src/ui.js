@@ -13,12 +13,13 @@ import { EVENT_BY_ID } from './events.js';
 import { goalProgress, friendsOf, rivalsOf, wantsRecipe, relation } from './social.js';
 import { REQUESTS, requestOptions, resolveRequest, requestFor } from './requests.js';
 import { memoryLines, trustLabel } from './memory.js';
+import { ROLES, FATE_LABEL, villagers, legacyTitle, farewellMood } from './farewell.js';
 import { GOALS, PROJECTS } from './goals.js';
 import { renderPortrait } from './sprites.js';
 
 const KIND_ICON = {
   depart: '🚶', success: '✅', fail: '🤕', escape: '🧪', story: '📖', buy: '🛒', deliver: '📦', refuse: '💬',
-  arrive: '👋', leave: '🚪', level: '⭐', banter: '🍺', craft: '🔨', bounty: '📋', build: '🏗️', info: '📜',
+  arrive: '👋', leave: '🚪', farewell: '🎒', level: '⭐', banter: '🍺', craft: '🔨', bounty: '📋', build: '🏗️', info: '📜',
   event: '📯', order: '🧾', goal: '🎯', broken: '💥', social: '👥', herogoal: '🎉', party: '🤝',
   request: '🙋', advice: '✋', growth: '✨', loan: '🤝', gift: '🎁',
 };
@@ -79,6 +80,16 @@ function gearName(id) {
     : '<span class="dim">–</span>';
 }
 
+// Ein Eintrag der Dorfchronik als zeichenbarer „Held“ (Dorfbewohner tragen keine Waffe mehr)
+export function legacyHero(l) {
+  return { id: l.id, cls: l.cls, female: l.female, look: l.look, armor: l.armor, weapon: l.fate === 'settled' ? null : l.weapon,
+    state: 'idle', mood: 75, potions: 0, civil: l.fate === 'settled' };
+}
+
+function quoted(label) {
+  return label.startsWith('„') ? esc(label) : `„${esc(label)}“`;
+}
+
 export class UI {
   constructor(game) {
     this.game = game; // { state, speed, setSpeed(), save(), newGame(), importData() }
@@ -116,6 +127,7 @@ export class UI {
       this.lastHtml = html;
       this.$('#panel').innerHTML = html;
       if (this.tab === 'helden') this.paintMinis();
+      if (this.tab === 'dorf') this.paintLegacy();
     }
     if (this.modal?.refresh) this.modal.refresh();
   }
@@ -400,9 +412,67 @@ export class UI {
         <div class="small ${done ? 'dim' : ''}">${p.desc}</div></div>`;
     }).join('');
     return `${this.goalCard(s)}<section><h2>Gebäude</h2>${bs}</section>
+      ${this.villagersHtml(s)}
       <section><h2>Dorfprojekte</h2><p class="small dim">Einmalige Investitionen mit dauerhaftem Nutzen.</p>${projects}</section>
       <section><h2>Umgebung</h2>${areas}</section>
-      <section><h2>Ruf</h2><p class="small">Ruf des Dorfes: <b>${s.reputation}</b>. Je besser dein Ruf, desto öfter und desto erfahrenere Helden kommen.</p></section>`;
+      <section><h2>Ruf</h2><p class="small">Ruf des Dorfes: <b>${s.reputation}</b>. Je besser dein Ruf, desto öfter und desto erfahrenere Helden kommen.</p></section>
+      ${this.legacyHtml(s)}`;
+  }
+
+  // Sesshaft gewordene Helden: Sie leben weiter im Dorf und helfen mit
+  villagersHtml(s) {
+    const list = villagers(s);
+    if (!list.length) return '';
+    const cards = list.slice().reverse().map((l) => `<div class="hero card" data-act="legacy" data-id="${l.id}">
+      <canvas class="mini" width="54" height="81" data-legacy="${l.id}"></canvas>
+      <div class="hinfo"><div class="row"><b>${esc(l.name)}</b><span>${ROLES[l.cls].icon}</span></div>
+        <div class="small">${ROLES[l.cls].name(l.female)} · früher ${legacyTitle(l)}</div>
+        <div class="small dim">${ROLES[l.cls].desc}</div></div></div>`).join('');
+    return `<section><h2>Dorfbewohner <span class="dim small">${list.length}</span></h2>
+      <p class="small dim">Helden, die in Eichenfurt sesshaft geworden sind. Bis zu drei mit derselben Aufgabe bringen ihren Nutzen ein.</p>${cards}</section>`;
+  }
+
+  // Dorfchronik: alle, die einmal hier waren
+  legacyHtml(s) {
+    const list = (s.legacy ?? []).filter((l) => l.fate !== 'settled').slice().reverse();
+    const ready = s.heroes.filter((h) => farewellMood(s, h)).map((h) => esc(h.name.split(' ')[0]));
+    const hint = ready.length ? `<p class="small">🎒 ${ready.join(', ')} ${ready.length === 1 ? 'denkt' : 'denken'} über den Abschied nach.</p>` : '';
+    if (!list.length && !ready.length) return '';
+    const rows = list.map((l) => `<div class="row small legacy-row" data-act="legacy" data-id="${l.id}"><span><b>${esc(l.name)}</b> · ${legacyTitle(l)}</span>
+      <span class="dim">${FATE_LABEL[l.fate](l)} · Tag ${Math.floor(l.c / 1440) + 1}</span></div>`).join('');
+    return `<section><h2>Dorfchronik</h2>${hint}
+      ${rows ? `<p class="small dim">Helden, die Eichenfurt verlassen haben. Antippen zeigt ihre Geschichte.</p>${rows}` : ''}</section>`;
+  }
+
+  paintLegacy() {
+    for (const c of document.querySelectorAll('canvas[data-legacy]')) {
+      const l = this.s.legacy.find((x) => x.id === Number(c.dataset.legacy));
+      if (l) renderPortrait(c, legacyHero(l), performance.now());
+    }
+  }
+
+  showLegacy(id) {
+    const s = this.s;
+    const l = (s.legacy ?? []).find((x) => x.id === id);
+    if (!l) return;
+    let day = null;
+    const rows = (l.bio ?? []).slice().reverse().map((e) => {
+      const d = Math.floor(e.c / 1440) + 1;
+      const head = d !== day ? `<div class="bio-day">Tag ${(day = d)}</div>` : '';
+      return `${head}<div class="bio-entry ${e.you ? 'you' : ''}"><span class="ico">${e.icon}</span><span>${esc(e.text)}</span></div>`;
+    }).join('');
+    this.openModal(`<div class="herohead"><canvas id="portrait" width="144" height="216"></canvas>
+      <div><h2>${esc(l.name)}</h2>
+        <div>${CLASSES[l.cls].icon} ${legacyTitle(l)}</div>
+        <div class="small">${FATE_LABEL[l.fate](l)} (Tag ${Math.floor(l.c / 1440) + 1})</div>
+        <div class="small dim">${l.days} ${l.days === 1 ? 'Tag' : 'Tage'} in Eichenfurt · ${l.successes}/${l.adventures} Abenteuer erfolgreich${l.goalsDone ? ` · ${l.goalsDone}× Traum erfüllt` : ''}</div>
+        <div class="small dim">${esc(l.name.split(' ')[0])} ${esc(l.trust)}.</div></div></div>
+      ${l.fate === 'settled' ? `<div class="thought big">${ROLES[l.cls].icon} ${ROLES[l.cls].name(l.female)}: ${ROLES[l.cls].desc}</div>` : ''}
+      <h3>Wesen</h3><div class="small">${l.traits.map((t) => TRAITS[t].name).join(' · ')}</div>
+      <h3>📖 Aus dem Heldenbuch</h3><div class="bio">${rows || '<p class="small dim">Keine Einträge.</p>'}</div>
+      <button class="wide link" data-act="close">Schließen</button>`);
+    const c = document.getElementById('portrait');
+    if (c) renderPortrait(c, legacyHero(l), performance.now());
   }
 
   // ---------- Dialoge ----------
@@ -584,7 +654,10 @@ export class UI {
     add('⏰', 'Bestellung verpasst', of('order', (e) => e.data?.failed).map((e) => esc(nameOf(e))));
     add('💥', 'Zerbrochen', of('broken').map((e) => esc(`${e.data?.item ?? 'Ausrüstung'} (${first(nameOf(e))})`)));
     add('👋', 'Neu im Dorf', of('arrive').map((e) => esc(first(nameOf(e)))));
-    add('🚪', 'Abgereist', of('leave').map((e) => esc(first(nameOf(e)))));
+    const gone = (pred) => of('farewell', (e) => pred(e.data?.fate)).map((e) => esc(first(s.legacy.find((l) => l.id === e.data?.legacy)?.name ?? '?')));
+    add('🏡', 'Sesshaft geworden', gone((f) => f === 'settled'));
+    add('👋', 'Weitergezogen', gone((f) => f === 'wandered'));
+    add('🚪', 'Im Groll gegangen', gone((f) => f === 'bitter' || f === 'left'));
     const crafted = s.stats.crafted - (before.crafted ?? s.stats.crafted);
     if (crafted > 0) add('🔨', 'Hergestellt', [`${crafted} ${crafted === 1 ? 'Stück' : 'Stück'}`]);
 
@@ -648,7 +721,7 @@ export class UI {
       <div><h2>${def.icon} ${def.title}</h2><p>${rich(def.text(s, q.data))}</p>
       <p class="small dim">${trust.icon} ${esc(h.name.split(' ')[0])} ${trust.text}.</p></div></div>
       <div class="options">${opts}</div>
-      <p class="small dim">${esc(h.name.split(' ')[0])} wartet bis ${fmtClock(clockOf(s, q.expires).minute)} Uhr (noch ${fmtDuration(q.expires - s.t)}), sonst: „${esc(options.at(-1).label)}“.${more > 0 ? ` Danach ${more === 1 ? 'wartet noch ein Besucher' : `warten noch ${more} Besucher`}.` : ''}</p>
+      <p class="small dim">${esc(h.name.split(' ')[0])} wartet bis ${fmtClock(clockOf(s, q.expires).minute)} Uhr (noch ${fmtDuration(q.expires - s.t)}), sonst: ${quoted(options.at(-1).label)}.${more > 0 ? ` Danach ${more === 1 ? 'wartet noch ein Besucher' : `warten noch ${more} Besucher`}.` : ''}</p>
       <button class="wide link" data-act="close">Später antworten</button>`);
     const c = document.getElementById('portrait');
     if (c) renderPortrait(c, h, performance.now());
@@ -708,6 +781,7 @@ export class UI {
       case 'settings': return this.showSettings();
       case 'close': return this.closeModal();
       case 'hero': return this.showHero(Number(id));
+      case 'legacy': return this.showLegacy(Number(id));
       case 'rfilter': this.recipeFilter = id; break;
       case 'craft': if (!queueCraft(s, id)) this.toast('Nicht genug Gold oder Warteschlange voll.'); break;
       case 'unqueue': cancelQueued(s, Number(el.dataset.i)); break;
