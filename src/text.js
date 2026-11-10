@@ -116,6 +116,12 @@ export const T = {
       'Ein Brüllen lässt den Berg erzittern. {n} betet zu Göttern, die {er} gar nicht kennt.',
       '{n} findet eine Schuppe, so groß wie ein Schild – noch warm.',
     ],
+    drachenhorstDanach: [
+      'Der Hort liegt still. Nur die Jungdrachen fauchen aus den Spalten, als {n} vorbeischleicht.',
+      '{n} steigt über Vharzuls gebleichte Rippen. Sie ragen auf wie die Balken einer Kathedrale.',
+      'Wo der Aschenfürst schlief, ist der Fels noch immer warm. {n} hält kurz inne.',
+      'Drei Jungdrachen streiten um einen Knochen. {n} nutzt die Gelegenheit.',
+    ],
   },
   // Nachsätze passend zu Wesenszügen
   traitFlavor: {

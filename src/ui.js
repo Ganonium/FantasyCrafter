@@ -11,7 +11,8 @@ import {
 } from './sim.js';
 import { EVENT_BY_ID } from './events.js';
 import { goalProgress, friendsOf, rivalsOf, wantsRecipe, relation } from './social.js';
-import { REQUESTS, requestOptions, resolveRequest, requestFor } from './requests.js';
+import { REQUESTS, requestOptions, resolveRequest, requestFor, requestMeta } from './requests.js';
+import { PREPS, threatDef, prepCost, buyPrep, fighters, guards, villageStrength, threatOdds } from './threat.js';
 import { memoryLines, trustLabel } from './memory.js';
 import { ROLES, FATE_LABEL, villagers, legacyTitle, farewellMood } from './farewell.js';
 import { GOALS, PROJECTS } from './goals.js';
@@ -19,7 +20,7 @@ import { renderPortrait } from './sprites.js';
 
 const KIND_ICON = {
   depart: '🚶', success: '✅', fail: '🤕', escape: '🧪', story: '📖', buy: '🛒', deliver: '📦', refuse: '💬',
-  arrive: '👋', leave: '🚪', farewell: '🎒', level: '⭐', banter: '🍺', craft: '🔨', bounty: '📋', build: '🏗️', info: '📜',
+  arrive: '👋', leave: '🚪', farewell: '🎒', saga: '📜', threat: '⚔️', level: '⭐', banter: '🍺', craft: '🔨', bounty: '📋', build: '🏗️', info: '📜',
   event: '📯', order: '🧾', goal: '🎯', broken: '💥', social: '👥', herogoal: '🎉', party: '🤝',
   request: '🙋', advice: '✋', growth: '✨', loan: '🤝', gift: '🎁',
 };
@@ -69,6 +70,8 @@ function moodIcon(m) {
 }
 
 function heroState(s, h) {
+  if (h.missing) return `verschollen 🕯️ (seit ${fmtDuration(s.t - h.missing.since)}, zuletzt: ${AREAS[h.missing.area].name})`;
+  if (h.quest?.search) return `auf der Suche: ${AREAS[h.area].icon} ${AREAS[h.area].name} · zurück in ca. ${fmtDuration(h.until - s.t)}`;
   if (h.state === 'away') return `unterwegs: ${AREAS[h.area].icon} ${AREAS[h.area].name} · zurück in ca. ${fmtDuration(h.until - s.t)}`;
   if (h.state === 'rest') return `ruht sich aus (noch ${fmtDuration(h.until - s.t)})`;
   if (h.state === 'injured') return `${h.wound === 'light' ? 'leicht verletzt' : 'schwer verletzt'} 🩹 (noch ${fmtDuration(h.until - s.t)})`;
@@ -84,6 +87,10 @@ function gearName(id) {
 export function legacyHero(l) {
   return { id: l.id, cls: l.cls, female: l.female, look: l.look, armor: l.armor, weapon: l.fate === 'settled' ? null : l.weapon,
     state: 'idle', mood: 75, potions: 0, civil: l.fate === 'settled' };
+}
+
+function cap(t) {
+  return t.charAt(0).toUpperCase() + t.slice(1);
 }
 
 function quoted(label) {
@@ -157,6 +164,12 @@ export class UI {
     let html = '';
     if (this.updateReady) {
       html += '<button class="event-btn update" data-act="reload">✨ <b>Neue Version verfügbar</b><span>Neu laden ›</span></button>';
+    }
+    if (s.threat) {
+      const def = threatDef(s);
+      html += s.threat.deadline === null
+        ? `<button class="event-btn threat" data-act="threat">${def.icon} <b>${esc(cap(def.short))} wurde vertrieben</b><span>… und kehrt zurück ›</span></button>`
+        : `<button class="event-btn threat" data-act="threat">${def.icon} <b>${esc(cap(def.short))} kommt in ${fmtDuration(s.threat.deadline - s.t)}</b><span>Rüsten ›</span></button>`;
     }
     if (s.event) {
       const def = EVENT_BY_ID[s.event.id];
@@ -437,10 +450,14 @@ export class UI {
     const list = (s.legacy ?? []).filter((l) => l.fate !== 'settled').slice().reverse();
     const ready = s.heroes.filter((h) => farewellMood(s, h)).map((h) => esc(h.name.split(' ')[0]));
     const hint = ready.length ? `<p class="small">🎒 ${ready.join(', ')} ${ready.length === 1 ? 'denkt' : 'denken'} über den Abschied nach.</p>` : '';
-    if (!list.length && !ready.length) return '';
+    const deeds = (s.deeds ?? []).slice().reverse().map((d) => `<div class="card deed"><div class="row"><b>${d.icon} ${esc(cap(d.name))}</b><span class="small dim">Tag ${d.day}</span></div>
+      <div class="small">${d.outcome === 'triumph' ? 'Ein glänzender Sieg' : 'Ein schwer erkämpfter Sieg'}${d.attempts > 1 ? ` im ${d.attempts}. Anlauf` : ''}${d.leader ? ` – angeführt von <b>${esc(d.leader)}</b>, ${esc(d.title)}` : ''}.</div>
+      <div class="small dim">Es kämpften: ${d.fighters.map((n) => esc(n.split(' ')[0])).join(', ')}</div></div>`).join('');
+    const great = deeds ? `<section><h2>Große Taten</h2><p class="small dim">Kapitel ${(s.chapter ?? 0) + 1} hat begonnen. Was Eichenfurt gemeinsam überstanden hat:</p>${deeds}</section>` : '';
+    if (!list.length && !ready.length) return great;
     const rows = list.map((l) => `<div class="row small legacy-row" data-act="legacy" data-id="${l.id}"><span><b>${esc(l.name)}</b> · ${legacyTitle(l)}</span>
       <span class="dim">${FATE_LABEL[l.fate](l)} · Tag ${Math.floor(l.c / 1440) + 1}</span></div>`).join('');
-    return `<section><h2>Dorfchronik</h2>${hint}
+    return `${great}<section><h2>Dorfchronik</h2>${hint}
       ${rows ? `<p class="small dim">Helden, die Eichenfurt verlassen haben. Antippen zeigt ihre Geschichte.</p>${rows}` : ''}</section>`;
   }
 
@@ -464,6 +481,7 @@ export class UI {
     this.openModal(`<div class="herohead"><canvas id="portrait" width="144" height="216"></canvas>
       <div><h2>${esc(l.name)}</h2>
         <div>${CLASSES[l.cls].icon} ${legacyTitle(l)}</div>
+        ${l.title ? `<div class="small ok">👑 ${esc(l.title)}</div>` : ''}
         <div class="small">${FATE_LABEL[l.fate](l)} (Tag ${Math.floor(l.c / 1440) + 1})</div>
         <div class="small dim">${l.days} ${l.days === 1 ? 'Tag' : 'Tage'} in Eichenfurt · ${l.successes}/${l.adventures} Abenteuer erfolgreich${l.goalsDone ? ` · ${l.goalsDone}× Traum erfüllt` : ''}</div>
         <div class="small dim">${esc(l.name.split(' ')[0])} ${esc(l.trust)}.</div></div></div>
@@ -508,6 +526,7 @@ export class UI {
 
       return `<div class="herohead"><canvas id="portrait" width="144" height="216"></canvas>
         <div><h2>${esc(h.name)}</h2>
+          ${h.title ? `<div class="small ok">👑 ${esc(h.title)}</div>` : ''}
           <div>${CLASSES[h.cls].icon} ${className(h.cls, h.female)} · Stufe ${h.level}</div>
           <div class="bar xp"><div style="width:${(h.xp / xpNeeded(h.level)) * 100}%"></div></div>
           <div class="small">Kraft <b>${heroPower(h)}</b> · ${Math.floor(h.gold)} 🪙 · Laune ${moodIcon(h.mood)} ${h.mood}</div>
@@ -565,7 +584,9 @@ export class UI {
   statusLines(s, h) {
     const out = [];
     const waiting = requestFor(s, h.id);
-    if (waiting) out.push(`🙋 Wartet an deinem Tresen: ${REQUESTS[waiting.type].title}`);
+    if (waiting) out.push(`🙋 Wartet an deinem Tresen: ${requestMeta(waiting).title}`);
+    if (h.quest && !h.quest.search && h.quest.until > s.t) out.push(`📜 Hat etwas vor: ${AREAS[h.quest.area].icon} ${AREAS[h.quest.area].name}`);
+    if (s.threat && h.threatRole) out.push(h.threatRole === 'guard' ? '🛡️ Schützt beim Kampf das Dorf' : '⚔️ Kämpft an vorderster Front');
     if (h.advice && h.advice.until > s.t) {
       const a = AREAS[h.advice.area];
       out.push(h.advice.type === 'encouraged' ? `🗣️ Von dir ermutigt: ${a.icon} ${a.name}` : `🗣️ Du hast abgeraten: ${a.icon} ${a.name}`);
@@ -655,6 +676,8 @@ export class UI {
     add('💥', 'Zerbrochen', of('broken').map((e) => esc(`${e.data?.item ?? 'Ausrüstung'} (${first(nameOf(e))})`)));
     add('👋', 'Neu im Dorf', of('arrive').map((e) => esc(first(nameOf(e)))));
     const gone = (pred) => of('farewell', (e) => pred(e.data?.fate)).map((e) => esc(first(s.legacy.find((l) => l.id === e.data?.legacy)?.name ?? '?')));
+    add('📜', 'Geschichten', of('saga', (e) => e.data?.good || e.data?.bad).map((e) => esc(`${first(nameOf(e))}: ${e.data.good ? 'gutes Ende' : 'böses Ende'}`)));
+    add('⚔️', 'Die große Gefahr', of('threat', (e) => e.data?.outcome || e.data?.omen).map((e) => (e.data.omen ? 'kündigt sich an' : { triumph: 'glänzend besiegt', victory: 'besiegt', repelled: 'vertrieben', defeat: 'das Dorf wurde verwüstet' }[e.data.outcome])));
     add('🏡', 'Sesshaft geworden', gone((f) => f === 'settled'));
     add('👋', 'Weitergezogen', gone((f) => f === 'wandered'));
     add('🚪', 'Im Groll gegangen', gone((f) => f === 'bitter' || f === 'left'));
@@ -704,11 +727,13 @@ export class UI {
     const q = (heroId !== null ? requestFor(s, heroId) : null) ?? s.requests[0];
     if (!q) return this.closeModal();
     const def = REQUESTS[q.type];
+    const meta = requestMeta(q);
     const h = s.heroes.find((x) => x.id === q.data.hero);
     if (!h) return this.closeModal();
     this.currentRequest = q;
     this.game.selectHero?.(h.id);
     const options = requestOptions(s, q);
+    if (!options.length) return this.closeModal(); // Anlass hat sich gerade erledigt
     const opts = options.map((o, i) => {
       const ok = !o.cost?.gold || s.gold >= o.cost.gold;
       return `<button class="option" data-act="answer" data-i="${i}" ${ok ? '' : 'disabled'}>
@@ -718,7 +743,7 @@ export class UI {
     const more = s.requests.length - 1;
     const trust = trustLabel(h);
     this.openModal(`<div class="herohead"><canvas id="portrait" width="144" height="216"></canvas>
-      <div><h2>${def.icon} ${def.title}</h2><p>${rich(def.text(s, q.data))}</p>
+      <div><h2>${meta.icon} ${meta.title}</h2><p>${rich(def.text(s, q.data))}</p>
       <p class="small dim">${trust.icon} ${esc(h.name.split(' ')[0])} ${trust.text}.</p></div></div>
       <div class="options">${opts}</div>
       <p class="small dim">${esc(h.name.split(' ')[0])} wartet bis ${fmtClock(clockOf(s, q.expires).minute)} Uhr (noch ${fmtDuration(q.expires - s.t)}), sonst: ${quoted(options.at(-1).label)}.${more > 0 ? ` Danach ${more === 1 ? 'wartet noch ein Besucher' : `warten noch ${more} Besucher`}.` : ''}</p>
@@ -731,15 +756,68 @@ export class UI {
   showRequestResult(q, text) {
     const s = this.s;
     const def = REQUESTS[q.type];
+    const meta = requestMeta(q);
     const h = s.heroes.find((x) => x.id === q.data.hero);
     const next = s.requests.length;
     this.openModal(`<div class="herohead">${h ? '<canvas id="portrait" width="144" height="216"></canvas>' : ''}
-      <div><h2>${def.icon} ${def.title}</h2><p>${rich(text)}</p>
+      <div><h2>${meta.icon} ${meta.title}</h2><p>${rich(text)}</p>
       ${h ? `<p class="small dim">${trustLabel(h).icon} ${esc(h.name.split(' ')[0])} ${trustLabel(h).text}.</p>` : ''}</div></div>
       ${next ? `<button class="wide" data-act="request">🙋 Nächster Besucher ›</button>` : ''}
       <button class="wide link" data-act="close">${next ? 'Später' : 'Weiter'}</button>`);
     const c = document.getElementById('portrait');
     if (c && h) renderPortrait(c, h, performance.now());
+  }
+
+  // Die große Bedrohung: Lage, Kämpfer und Vorbereitungen
+  showThreat() {
+    const s = this.s;
+    const t = s.threat;
+    if (!t) return this.closeModal();
+    const def = threatDef(s);
+    if (t.deadline === null) {
+      this.modal = null;
+      return this.openModal(`<h2>${def.icon} ${esc(cap(def.name))}</h2>
+        <p>Das Ungeheuer wurde vertrieben und leckt seine Wunden. In ${fmtDuration(Math.max(0, t.returnAt - s.t))} dürfte es zurück sein – geschwächt, aber wütend.</p>
+        <p class="small dim">Was du vorbereitet hast, bleibt stehen. Nutze die Zeit: bessere Ausrüstung, gute Laune, gesunde Helden.</p>
+        <button class="wide link" data-act="close">Schließen</button>`);
+    }
+    const body = () => {
+      const odds = threatOdds(s);
+      const fs = fighters(s), gs = guards(s);
+      const now = villageStrength(s), soon = villageStrength(s, true);
+      const away = s.heroes.filter((h) => h.state === 'away');
+      const hurt = s.heroes.filter((h) => h.state === 'injured' && h.wound !== 'light');
+      const names = (list) => list.map((h) => esc(h.name.split(' ')[0])).join(', ') || '–';
+      const preps = Object.entries(PREPS).map(([id, p]) => {
+        const done = t.prep[id];
+        const cost = prepCost(s, id);
+        return `<div class="card project ${done ? 'done' : ''}"><div class="row"><b>${p.icon} ${p.name}</b>
+          ${done ? '<span class="ok small">bereit</span>' : `<button data-act="prep" data-id="${id}" ${s.gold < cost ? 'disabled' : ''}>${cost.toLocaleString('de-DE')} 🪙</button>`}</div>
+          <div class="small ${done ? 'dim' : ''}">${p.desc}</div></div>`;
+      }).join('');
+      return `<h2>${def.icon} ${esc(cap(def.name))}</h2>
+        <p>${t.attempt > 1 ? 'Das Ungeheuer ist zurück. ' : ''}Noch <b>${fmtDuration(Math.max(0, t.deadline - s.t))}</b>, dann stellen sich die Helden zum Kampf. Wer dann nicht im Dorf ist, fehlt.</p>
+        <div class="stats two"><div><b>${soon}</b>Stärke des Dorfes${soon !== now ? `<br><span class="dim">im Moment ${now}</span>` : ''}</div><div><b>${t.strength}</b>Stärke der Gefahr</div></div>
+        <div class="bar threat"><div style="width:${Math.min(100, (odds.ratio / 1.6) * 100)}%"></div></div>
+        <p class="${odds.cls}"><b>${odds.text}.</b></p>
+        <div class="small">⚔️ Kämpfen (${fs.length}): ${names(fs)}</div>
+        ${gs.length ? `<div class="small">🛡️ Schützen das Dorf: ${names(gs)}</div>` : ''}
+        ${away.length ? `<div class="small dim">Noch unterwegs (zählen mit, wenn sie rechtzeitig zurück sind): ${names(away)}</div>` : ''}
+        ${hurt.length ? `<div class="small dim">Zu schwer verletzt: ${names(hurt)}</div>` : ''}
+        <h3>Vorbereitungen</h3>
+        <p class="small dim">Hier zählt dein Gold. Bessere Ausrüstung, gute Laune und Dorfbewohner stärken das Dorf ebenfalls.</p>
+        ${preps}
+        <button class="wide link" data-act="close">Schließen</button>`;
+    };
+    this.modalHtml = body();
+    this.openModal(this.modalHtml);
+    this.modal = {
+      refresh: () => {
+        if (!s.threat || s.threat.deadline === null) return this.closeModal();
+        const html = body();
+        if (html !== this.modalHtml) { this.modalHtml = html; this.$('#modal-body').innerHTML = html; }
+      },
+    };
   }
 
   showSettings() {
@@ -782,6 +860,8 @@ export class UI {
       case 'close': return this.closeModal();
       case 'hero': return this.showHero(Number(id));
       case 'legacy': return this.showLegacy(Number(id));
+      case 'threat': return this.showThreat();
+      case 'prep': if (buyPrep(s, id)) { this.toast('Wird vorbereitet!'); this.modal?.refresh?.(); } break;
       case 'rfilter': this.recipeFilter = id; break;
       case 'craft': if (!queueCraft(s, id)) this.toast('Nicht genug Gold oder Warteschlange voll.'); break;
       case 'unqueue': cancelQueued(s, Number(el.dataset.i)); break;

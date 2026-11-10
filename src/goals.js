@@ -32,6 +32,9 @@ export const GOALS = [
   { text: 'Ein Held wird in Eichenfurt sesshaft', check: (s) => [settled(s), 1], reward: { mondkristall: 3 } },
   { text: 'Drei Dorfbewohner leben in Eichenfurt', check: (s) => [settled(s), 3], reward: { trollknochen: 3 } },
   { text: 'Zehn Helden stehen in der Dorfchronik', check: (s) => [(s.legacy ?? []).length, 10], reward: { drachenschuppe: 3 } },
+  // Das Finale – und was danach kommt
+  { text: 'Bezwinge Vharzul, den Aschenfürsten', check: (s) => [(s.deeds ?? []).some((d) => d.id === 'vharzul') ? 1 : 0, 1], reward: { gold: 2000 } },
+  { text: 'Überstehe drei große Gefahren', check: (s) => [s.chapter ?? 0, 3], reward: { gold: 5000 } },
 ];
 
 // mods wie bei Ereignis-Effekten: { key, v, area?, mat? }

@@ -91,6 +91,26 @@ export const MEMORIES = {
     line: () => 'Du hattest keine Zeit, als es darauf ankam.',
     thought: () => 'Du hast ja nie Zeit.',
   },
+  rescued: {
+    icon: '🕯️', trust: 18, you: true,
+    line: (m) => `War ${area(m).in} verschollen – du hast suchen lassen, ${m.other} fand ${m.f ? 'sie' : 'ihn'}.`,
+    thought: () => 'Ihr habt mich nicht aufgegeben. Das vergess ich euch nie.',
+  },
+  abandoned: {
+    icon: '🕯️', trust: -20, you: true,
+    line: (m) => `War ${area(m).in} verschollen. Niemand kam.`,
+    thought: () => 'Ich lag da draußen und hab gewartet. Auf niemanden, wie sich zeigte.',
+  },
+  avenged: {
+    icon: '🔥', trust: 12, you: true,
+    line: (m) => `Nahm Rache ${area(m).in} – von dir ausgerüstet.`,
+    thought: () => 'Die Rechnung ist beglichen. Dank dir.',
+  },
+  greatDeed: {
+    icon: '👑', trust: 0,
+    line: (m) => `Stand gegen ${m.foe} – und siegte.`,
+    thought: (m) => `Der Kampf gegen ${m.foe.split(',')[0]} … Ich träum immer noch davon.`,
+  },
   thanked: {
     icon: '💛', trust: 3, you: true,
     line: () => 'Kam vorbei, um sich bei dir zu bedanken.',
