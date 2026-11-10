@@ -14,6 +14,7 @@ import {
 } from './social.js';
 import { bio, bump, life, checkGrowth, growTrait, traitThreshold, traitDrive, moodBaseline } from './life.js';
 import { processRequests } from './requests.js';
+import { remember, scarredIn, freshScar, memoryThought, trustOf, changeTrust } from './memory.js';
 
 export const SAVE_VERSION = 2;
 const LOG_LIMIT = 500;
@@ -71,7 +72,9 @@ function addV2Fields(s) {
   s.clockOffset ??= 0;
   s.guestDue ??= null;
   s.relations ??= {};
-  s.request ??= null;
+  // Besucher am Tresen: früher eine einzelne Bitte, jetzt eine kleine Warteschlange
+  s.requests ??= s.request ? [s.request] : [];
+  delete s.request;
   s.nextRequest ??= s.t + 240;
 }
 
@@ -295,8 +298,10 @@ function has(h, trait) {
   return h.traits.includes(trait);
 }
 
-function setThought(h, text) {
+// icon: kleines Symbol für die Gedankenblase in der Dorfszene (null = keine Blase)
+function setThought(h, text, icon = null) {
   h.thought = text;
+  h.thoughtIcon = icon;
 }
 
 export function changeMood(h, d) {
@@ -327,6 +332,8 @@ export function evaluateAreas(s, h, { power = heroPower(h) } = {}) {
     if (h.potions > 0) threshold -= 0.07;
     if (h.mood > 75) threshold -= 0.05;
     if (h.mood < 30) threshold += 0.08;
+    // Frische Wunden: Wo man gerade erst schwer verletzt wurde, ist man zögerlicher
+    if (freshScar(s, h, id) && !has(h, 'abgehaertet') && !has(h, 'uebermuetig')) threshold += 0.1;
     if (bountyValue > avgGold * 1.5) threshold -= has(h, 'gierig') ? 0.15 : 0.07;
     // Geldnot: Wer pleite ist, muss irgendwann losziehen – sonst bliebe er für immer in der Taverne sitzen
     if (h.gold < 40) threshold -= 0.12;
@@ -353,9 +360,16 @@ export function evaluateAreas(s, h, { power = heroPower(h) } = {}) {
     if (h.hated === id) block = 'hated';
     else if (advice === 'discouraged') block = 'advice';
     else if (p < threshold) block = 'danger';
+    // Die Narbe: dorthin nur noch mit Heiltrank (am Gürtel oder aus deinem Regal)
+    else if (needsPotionFor(s, h, id)) block = 'scar';
     res.push({ id, p, value, threshold, bountyValue, block });
   }
   return res;
+}
+
+function needsPotionFor(s, h, areaId) {
+  if (h.potions > 0 || has(h, 'uebermuetig') || !scarredIn(s, h, areaId)) return false;
+  return !(s.shelf.some((it) => it.recipe === 'heiltrank') && h.gold >= priceOf(s, 'heiltrank'));
 }
 
 function sellToHero(s, h, recipe, price, idx) {
@@ -369,7 +383,12 @@ function sellToHero(s, h, recipe, price, idx) {
 function tryShopping(s, r, h) {
   // Konkurrenz am Markt: Manchmal schaut sich ein Held lieber erst dort um
   if (!r.chance(effectVal(s, 'buyChance'))) {
-    if (s.shelf.some((it) => RECIPES[it.recipe].cls === h.cls)) setThought(h, r.pick(THOUGHTS.competitor));
+    if (s.shelf.some((it) => RECIPES[it.recipe].cls === h.cls)) setThought(h, r.pick(THOUGHTS.competitor), '🛍️');
+    return false;
+  }
+  // Wer dir etwas nachträgt, kauft nur widerwillig bei dir
+  if (trustOf(h) <= -30 && r.chance(0.4)) {
+    if (s.shelf.some((it) => RECIPES[it.recipe].cls === h.cls)) setThought(h, r.pick(THOUGHTS.grudge), '😒');
     return false;
   }
   let bought = false;
@@ -391,7 +410,7 @@ function tryShopping(s, r, h) {
       refusal = null;
       break;
     }
-    if (refusal) setThought(h, refusal);
+    if (refusal) setThought(h, refusal, '🛒');
   }
   if (bought) checkHeroGoal(s, r, h);
   return bought;
@@ -406,9 +425,25 @@ function purchase(s, r, h, recipe, idx) {
   changeMood(h, 8);
   log(s, 'buy', fmt(say(s, r, 'buy.' + rc.slot, T.buy[rc.slot]), h, { x: `**${rc.name}**` }) + ` (+${price} 🪙)`, h.id);
   bio(s, h, '🛒', `Kaufte ${rc.name} bei dir.`, true);
-  setThought(h, `${rc.name}! Das muss ich gleich ausprobieren.`);
+  setThought(h, `${rc.name}! Das muss ich gleich ausprobieren.`, '✨');
+  // Gute Ware schafft Vertrauen – aber nur bis zu einem gewissen Grad
+  if (trustOf(h) < 30) changeTrust(h, 2);
   // Der Rivale sieht das gar nicht gern
-  for (const o of rivalsOf(s, h)) setThought(o, fmt(r.pick(THOUGHTS.rivalAhead), o, { o: h.name }));
+  for (const o of rivalsOf(s, h)) setThought(o, fmt(r.pick(THOUGHTS.rivalAhead), o, { o: h.name }), '💢');
+}
+
+// Für Besucher am Tresen: ein Teil aus dem Regal geht an den Helden – geschenkt (price 0) oder zum Sonderpreis
+export function giveItem(s, h, recipe, price = 0) {
+  const idx = s.shelf.findIndex((it) => it.recipe === recipe);
+  if (idx < 0 || h.gold < price) return false;
+  const rc = RECIPES[recipe];
+  s.shelf.splice(idx, 1);
+  h.gold -= price;
+  s.gold += price;
+  if (price > 0) { s.stats.sold += 1; s.stats.earned += price; }
+  if (rc.slot === 'potion') h.potions += 1;
+  else h[rc.slot] = recipe;
+  return true;
 }
 
 // Für Bitten (Vorschuss): genau dieses Teil kaufen, falls es noch im Regal liegt
@@ -420,14 +455,14 @@ export function buyItem(s, r, h, recipe) {
   return true;
 }
 
-function buyPotion(s, r, h) {
+function buyPotion(s, r, h, force = false) {
   // Übermütige glauben, keinen Heiltrank zu brauchen
   if (h.potions > 0 || has(h, 'uebermuetig')) return;
   const idx = s.shelf.findIndex((it) => it.recipe === 'heiltrank');
   if (idx < 0) return;
   const price = priceOf(s, 'heiltrank');
   // Vorsichtige und Spendable greifen sofort zu, alle anderen nur mit Rücklage
-  const reserve = has(h, 'spendabel') || has(h, 'vorsichtig') ? 1 : has(h, 'geizig') ? 2 : 1.5;
+  const reserve = force || has(h, 'spendabel') || has(h, 'vorsichtig') ? 1 : has(h, 'geizig') ? 2 : 1.5;
   if (h.gold < price * reserve) return;
   sellToHero(s, h, 'heiltrank', price, idx);
   h.potions += 1;
@@ -449,7 +484,7 @@ function think(s, r, h) {
 
   if (effectVal(s, 'depart') === 0) {
     const e = activeEffects(s).find((x) => x.mods.some((m) => m.key === 'depart'));
-    setThought(h, fmt(r.pick(THOUGHTS.staying), h, { x: e?.label ?? 'Fest' }));
+    setThought(h, fmt(r.pick(THOUGHTS.staying), h, { x: e?.label ?? 'Fest' }), '🎉');
     return;
   }
 
@@ -485,7 +520,9 @@ function think(s, r, h) {
   if (topBounty && (!go || best.id !== topBounty.id)) {
     let reason = null;
     const v = areaVars(topBounty.id);
-    if (topBounty.block === 'hated') {
+    if (topBounty.block === 'scar') {
+      reason = fmt(r.pick(THOUGHTS.scar), h, v);
+    } else if (topBounty.block === 'hated') {
       reason = topBounty.id === 'spinnenhoehle' ? THOUGHTS.hatedSpider[0] : fmt(r.pick(THOUGHTS.hated), h, v);
     } else if (topBounty.block === 'danger') {
       reason = !h.weapon && !h.armor ? fmt(THOUGHTS.tooDangerousNoGear[0], h, v) : fmt(r.pick(THOUGHTS.tooDangerous), h, v);
@@ -497,26 +534,31 @@ function think(s, r, h) {
         const intro = say(s, r, 'refuseIntro', T.refuseIntro);
         log(s, 'refuse', `${fmt(intro, h)} „${reason}“`, h.id);
       }
-      if (!go) { setThought(h, reason); return; }
+      if (!go) { setThought(h, reason, topBounty.block === 'hated' ? '😖' : topBounty.block === 'scar' ? '🧪' : '😨'); return; }
     }
   }
 
   if (!best) {
-    setThought(h, fmt(r.pick(THOUGHTS.tooDangerous), h, areaVars('kornfelder')));
+    const scar = evals.find((e) => e.block === 'scar');
+    if (scar) setThought(h, fmt(r.pick(THOUGHTS.scar), h, areaVars(scar.id)), '🧪');
+    else setThought(h, fmt(r.pick(THOUGHTS.tooDangerous), h, areaVars('kornfelder')), '😨');
     return;
   }
   if (!go) {
-    if (h.gold > 400 + h.level * 60) setThought(h, THOUGHTS.rich[0]);
-    else if (h.mood < 30) setThought(h, r.pick(THOUGHTS.moody));
-    else if (h.goal && r.chance(0.45)) setThought(h, goalThought(s, r, h));
-    else setThought(h, r.pick(THOUGHTS.lazy));
+    const memory = r.chance(0.3) ? memoryThought(h, r) : null;
+    if (memory) setThought(h, memory, '💭');
+    else if (h.gold > 400 + h.level * 60) setThought(h, THOUGHTS.rich[0], '💰');
+    else if (h.mood < 30) setThought(h, r.pick(THOUGHTS.moody), '😠');
+    else if (h.goal && r.chance(0.45)) setThought(h, goalThought(s, r, h), '🌟');
+    else setThought(h, r.pick(THOUGHTS.lazy), '🍺');
     return;
   }
   departSolo(s, r, h, best);
 }
 
 function sendAway(s, r, h, ev, until) {
-  if (AREAS[ev.id].danger >= 9) buyPotion(s, r, h);
+  if (scarredIn(s, h, ev.id)) buyPotion(s, r, h, true);
+  else if (AREAS[ev.id].danger >= 9) buyPotion(s, r, h);
   h.state = 'away';
   h.area = ev.id;
   h.departedAt = s.t;
@@ -633,7 +675,18 @@ function returnHome(s, r, h, opts = {}) {
     s.stats.areaWins[h.area] = (s.stats.areaWins[h.area] ?? 0) + 1;
     h.areaWins = h.areaWins ?? {};
     h.areaWins[h.area] = (h.areaWins[h.area] ?? 0) + 1;
-    if (h.areaWins[h.area] === 1) bio(s, h, '🏆', `Erster Sieg ${a.in}.`);
+    if (h.areaWins[h.area] === 1) {
+      bio(s, h, '🏆', `Erster Sieg ${a.in}.`);
+      const gear = h.weapon ?? h.armor;
+      if (gear) remember(s, h, 'firstWin', { area: h.area, item: RECIPES[gear].name });
+      h.tale = { area: h.area, t: s.t, kind: 'first' };
+    } else if (roll > h.chance - 0.1 && a.danger >= 9) h.tale = { area: h.area, t: s.t, kind: 'close' };
+    // Wer dir vertraut, denkt unterwegs an dich
+    if (a.mat && trustOf(h) >= 40 && r.chance(0.15)) {
+      s.mats[a.mat] += 1;
+      log(s, 'gift', fmt('🎁 {n} hat dir {aus} etwas mitgebracht: {M}. „Für dich. Einfach so.“', h, v), h.id, { mat: a.mat });
+      bio(s, h, '🎁', `Brachte dir ${a.aus} ${MATERIALS[a.mat].name} mit.`, true);
+    }
     // Nur Siege, bei denen wirklich etwas auf dem Spiel stand, steigen zu Kopf
     if (h.chance < 0.85) bump(h, 'winStreak');
     // Siege lassen alte Niederlagen verblassen
@@ -655,6 +708,7 @@ function returnHome(s, r, h, opts = {}) {
     changeMood(h, -4);
     life(h).winStreak = 0;
     bio(s, h, '🧪', `Dein Heiltrank rettete ${h.female ? 'ihr' : 'ihm'} ${a.in} das Leben.`, true);
+    remember(s, h, 'saved', { area: h.area });
     if (!opts.quiet) log(s, 'escape', fmt(say(s, r, 'escape', T.escape), h, v), h.id);
     h.state = 'rest';
     h.until = s.t + Math.round((40 + a.time * 0.3) * effectVal(s, 'rest'));
@@ -668,9 +722,10 @@ function returnHome(s, r, h, opts = {}) {
     bump(h, 'heavyDefeats');
     bump(h, 'injuries');
     bio(s, h, '🤕', `Kam schwer verletzt ${a.aus} zurück.`);
+    remember(s, h, 'hurt', { area: h.area });
     if (!opts.quiet) log(s, 'fail', fmt(say(s, r, 'fail', T.fail), h, v) + (lost ? ` (${lost} 🪙 verloren)` : ''), h.id, { injured: true });
     // Freunde machen sich Sorgen
-    for (const f of friendsOf(s, h)) { changeMood(f, -4); setThought(f, fmt(THOUGHTS.friendHurt[0], f, { o: h.name })); }
+    for (const f of friendsOf(s, h)) { changeMood(f, -4); setThought(f, fmt(THOUGHTS.friendHurt[0], f, { o: h.name }), '💛'); }
     // Schwere Niederlage (ohne Heiltrank): höchstens ein Ausrüstungsteil kann zerbrechen
     const gear = ['weapon', 'armor'].filter((slot) => h[slot]);
     if (gear.length && r.chance(0.15)) {
@@ -680,6 +735,7 @@ function returnHome(s, r, h, opts = {}) {
       changeMood(h, -6);
       log(s, 'broken', fmt(say(s, r, 'gearBroken', T.gearBroken), h, { ...v, x: `**${name}**` }), h.id, { item: name });
       bio(s, h, '💥', `${name} zerbrach ${a.in}.`);
+      remember(s, h, 'gearBroke', { area: h.area, item: name, slot });
     }
     h.state = 'injured';
     const base = (r.int(180, 360) + a.danger * 2) * effectVal(s, 'injury') * (has(h, 'abgehaertet') ? 0.6 : 1);
@@ -691,6 +747,7 @@ function returnHome(s, r, h, opts = {}) {
     const ihm = h.female ? 'ihr' : 'ihm';
     if (success) {
       bump(h, 'goodAdvice'); bump(h, 'joy');
+      remember(s, h, 'goodAdvice', { area: h.area });
       changeMood(h, 8);
       log(s, 'advice', fmt(`🗣️ Weil du {ihm} Mut gemacht hast, wagte sich {n} {zu} – und siegte! „Danke für deinen Rat!“`, h, v), h.id, { good: true });
       bio(s, h, '✋', `Wagte sich auf deinen Rat hin ${a.zu} – und siegte.`, true);
@@ -699,6 +756,7 @@ function returnHome(s, r, h, opts = {}) {
       bio(s, h, '✋', `Wagte sich auf deinen Rat hin ${a.zu} und musste fliehen.`, true);
     } else {
       bump(h, 'badAdvice');
+      remember(s, h, 'badAdvice', { area: h.area });
       log(s, 'advice', fmt(`🗣️ Auf deinen Rat hin zog {n} {zu} – und kam verwundet zurück. „Das hast du ja toll eingefädelt.“`, h, v), h.id, { bad: true });
       bio(s, h, '✋', `Wagte sich auf deinen Rat hin ${a.zu} und kam schwer verletzt zurück. Das nimmt ${ihm} dir übel.`, true);
     }
@@ -712,7 +770,7 @@ function returnHome(s, r, h, opts = {}) {
     h.level++;
     log(s, 'level', fmt(say(s, r, 'levelUp', T.levelUp), h, { x: h.level }), h.id, { level: h.level });
     bio(s, h, '⭐', `Erreichte Stufe ${h.level}.`);
-    for (const o of rivalsOf(s, h)) { changeMood(o, -3); setThought(o, fmt(r.pick(THOUGHTS.rivalAhead), o, { o: h.name })); }
+    for (const o of rivalsOf(s, h)) { changeMood(o, -3); setThought(o, fmt(r.pick(THOUGHTS.rivalAhead), o, { o: h.name }), '💢'); }
   }
   if (pieces > 0) {
     if (h.bountyTrip || s.bounties.some((b) => b.mat === a.mat)) deliverBounty(s, r, h, a.mat, pieces);

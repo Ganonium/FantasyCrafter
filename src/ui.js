@@ -11,7 +11,8 @@ import {
 } from './sim.js';
 import { EVENT_BY_ID } from './events.js';
 import { goalProgress, friendsOf, rivalsOf, wantsRecipe, relation } from './social.js';
-import { REQUESTS, requestOptions, resolveRequest } from './requests.js';
+import { REQUESTS, requestOptions, resolveRequest, requestFor } from './requests.js';
+import { memoryLines, trustLabel } from './memory.js';
 import { GOALS, PROJECTS } from './goals.js';
 import { renderPortrait } from './sprites.js';
 
@@ -19,7 +20,7 @@ const KIND_ICON = {
   depart: '🚶', success: '✅', fail: '🤕', escape: '🧪', story: '📖', buy: '🛒', deliver: '📦', refuse: '💬',
   arrive: '👋', leave: '🚪', level: '⭐', banter: '🍺', craft: '🔨', bounty: '📋', build: '🏗️', info: '📜',
   event: '📯', order: '🧾', goal: '🎯', broken: '💥', social: '👥', herogoal: '🎉', party: '🤝',
-  request: '🙋', advice: '✋', growth: '✨', loan: '🤝',
+  request: '🙋', advice: '✋', growth: '✨', loan: '🤝', gift: '🎁',
 };
 
 const TABS = [
@@ -149,9 +150,10 @@ export class UI {
       const def = EVENT_BY_ID[s.event.id];
       html += `<button class="event-btn" data-act="event">${def.icon} <b>${def.title}</b><span>Entscheiden ›</span></button>`;
     }
-    if (s.request) {
-      const h = s.heroes.find((x) => x.id === s.request.data.hero);
-      if (h) html += `<button class="event-btn request" data-act="request">🙋 <b>${esc(h.name.split(' ')[0])} hat eine Bitte</b><span>Anhören ›</span></button>`;
+    if (s.requests.length) {
+      const h = s.heroes.find((x) => x.id === s.requests[0].data.hero);
+      const label = s.requests.length > 1 ? `${s.requests.length} Besucher warten am Tresen` : `${esc(h?.name.split(' ')[0] ?? 'Jemand')} wartet am Tresen`;
+      html += `<button class="event-btn request" data-act="request">🙋 <b>${label}</b><span>Anhören ›</span></button>`;
     }
     const offered = s.orders.filter((o) => o.state === 'offered').length;
     if (offered) html += `<button class="event-btn order" data-act="tab" data-id="auftraege">🧾 <b>${offered === 1 ? 'Neue Bestellanfrage' : `${offered} Bestellanfragen`}</b><span>Ansehen ›</span></button>`;
@@ -430,6 +432,7 @@ export class UI {
         const a = AREAS[e.id];
         const encouraged = h.advice?.type === 'encouraged' && h.advice.area === e.id && h.advice.until > s.t;
         const why = e.block === 'hated' ? '<span class="bad">hasst es</span>' : e.block === 'advice' ? '<span class="bad">du hast abgeraten</span>'
+          : e.block === 'scar' ? '<span class="bad">nur mit Heiltrank</span>'
           : e.block === 'danger' ? '<span class="bad">zu gefährlich</span>' : encouraged ? '<span class="ok">von dir ermutigt</span>' : '<span class="ok">traut sich</span>';
         return `<div class="row small"><span>${a.icon} ${a.name}${h.fav === e.id ? ' ❤️' : ''}</span><span>${Math.round(e.p * 100)}% · ${why}</span></div>`;
       }).join('');
@@ -454,6 +457,7 @@ export class UI {
         <h3>Wunsch</h3>${this.goalLine(s, h) || '<p class="small dim">Gerade wunschlos glücklich.</p>'}
         ${h.goalsDone ? `<div class="small dim">Schon ${h.goalsDone}× einen Traum erfüllt.</div>` : ''}
         <h3>Beziehungen</h3>${this.relationsHtml(s, h)}
+        ${this.memoryHtml(h)}
         <h3>Einschätzung der Gebiete</h3>${areas}
         ${this.bioHtml(s, h)}`;
     };
@@ -477,8 +481,22 @@ export class UI {
   }
 
   // Besondere Umstände: Rat, Lehre, Schulden, Wettstreit
+  // Verhältnis zu dir und die prägenden Erinnerungen
+  memoryHtml(h) {
+    const trust = trustLabel(h);
+    const first = esc(h.name.split(' ')[0]);
+    const pos = Math.round((trust.value + 100) / 2);
+    const lines = memoryLines(h).map((m) => `<div class="small mem${m.you ? ' you' : ''}">${m.icon} ${esc(m.text)}</div>`).join('');
+    return `<h3>Verhältnis zu dir</h3>
+      <div class="small">${trust.icon} ${first} ${trust.text}.</div>
+      <div class="bar trust"><div style="width:${pos}%"></div></div>
+      ${lines ? `<div class="small dim">Woran ${first} sich erinnert:</div>${lines}` : `<div class="small dim">${first} verbindet noch nichts Besonderes mit dir.</div>`}`;
+  }
+
   statusLines(s, h) {
     const out = [];
+    const waiting = requestFor(s, h.id);
+    if (waiting) out.push(`🙋 Wartet an deinem Tresen: ${REQUESTS[waiting.type].title}`);
     if (h.advice && h.advice.until > s.t) {
       const a = AREAS[h.advice.area];
       out.push(h.advice.type === 'encouraged' ? `🗣️ Von dir ermutigt: ${a.icon} ${a.name}` : `🗣️ Du hast abgeraten: ${a.icon} ${a.name}`);
@@ -536,7 +554,7 @@ export class UI {
       <div><b>${succ}/${adv}</b>Abenteuer</div></div>
       ${this.summaryHtml(s, before, entries)}
       ${s.event ? `<button class="event-btn" data-act="event">${EVENT_BY_ID[s.event.id].icon} <b>${EVENT_BY_ID[s.event.id].title}</b><span>Entscheidung nötig ›</span></button>` : ''}
-      ${s.request ? `<button class="event-btn request" data-act="request">🙋 <b>Eine Bitte wartet auf dich</b><span>Anhören ›</span></button>` : ''}
+      ${s.requests.length ? `<button class="event-btn request" data-act="request">🙋 <b>${s.requests.length > 1 ? `${s.requests.length} Besucher warten am Tresen` : 'Jemand wartet am Tresen'}</b><span>Anhören ›</span></button>` : ''}
       ${s.orders.some((o) => o.state === 'offered') ? `<button class="event-btn order" data-act="tab" data-id="auftraege">🧾 <b>Bestellanfrage wartet</b><span>Ansehen ›</span></button>` : ''}
       ${list ? `<h3>Alles der Reihe nach</h3>${list}` : '<p class="dim">Ruhige Zeiten in Eichenfurt.</p>'}
       ${entries.length > 80 ? `<p class="small dim">… und ${entries.length - 80} weitere Einträge in der Chronik.</p>` : ''}
@@ -615,27 +633,48 @@ export class UI {
       <button class="wide link" data-act="close">Später entscheiden</button>`);
   }
 
-  showRequest() {
+  // heroId: genau dieser Besucher (z. B. in der Dorfszene angetippt), sonst der erste in der Schlange
+  showRequest(heroId = null) {
     const s = this.s;
-    const q = s.request;
+    const q = (heroId !== null ? requestFor(s, heroId) : null) ?? s.requests[0];
     if (!q) return this.closeModal();
     const def = REQUESTS[q.type];
     const h = s.heroes.find((x) => x.id === q.data.hero);
     if (!h) return this.closeModal();
-    const opts = requestOptions(s).map((o, i) => {
+    this.currentRequest = q;
+    this.game.selectHero?.(h.id);
+    const options = requestOptions(s, q);
+    const opts = options.map((o, i) => {
       const ok = !o.cost?.gold || s.gold >= o.cost.gold;
       return `<button class="option" data-act="answer" data-i="${i}" ${ok ? '' : 'disabled'}>
         <b>${esc(o.label)}</b>${o.cost?.gold ? `<span class="cost">${o.cost.gold} 🪙</span>` : ''}
         ${o.desc ? `<small>${esc(o.desc)}</small>` : ''}</button>`;
     }).join('');
-    const fallback = requestOptions(s).at(-1).label;
+    const more = s.requests.length - 1;
+    const trust = trustLabel(h);
     this.openModal(`<div class="herohead"><canvas id="portrait" width="144" height="216"></canvas>
-      <div><h2>${def.icon} ${def.title}</h2><p>${rich(def.text(s, q.data))}</p></div></div>
+      <div><h2>${def.icon} ${def.title}</h2><p>${rich(def.text(s, q.data))}</p>
+      <p class="small dim">${trust.icon} ${esc(h.name.split(' ')[0])} ${trust.text}.</p></div></div>
       <div class="options">${opts}</div>
-      <p class="small dim">${esc(h.name.split(' ')[0])} wartet bis ${fmtClock(clockOf(s, q.expires).minute)} Uhr (noch ${fmtDuration(q.expires - s.t)}), sonst: „${esc(fallback)}“.</p>
+      <p class="small dim">${esc(h.name.split(' ')[0])} wartet bis ${fmtClock(clockOf(s, q.expires).minute)} Uhr (noch ${fmtDuration(q.expires - s.t)}), sonst: „${esc(options.at(-1).label)}“.${more > 0 ? ` Danach ${more === 1 ? 'wartet noch ein Besucher' : `warten noch ${more} Besucher`}.` : ''}</p>
       <button class="wide link" data-act="close">Später antworten</button>`);
     const c = document.getElementById('portrait');
     if (c) renderPortrait(c, h, performance.now());
+  }
+
+  // Nach der Antwort: kurz zeigen, was passiert ist – und wer als Nächstes wartet
+  showRequestResult(q, text) {
+    const s = this.s;
+    const def = REQUESTS[q.type];
+    const h = s.heroes.find((x) => x.id === q.data.hero);
+    const next = s.requests.length;
+    this.openModal(`<div class="herohead">${h ? '<canvas id="portrait" width="144" height="216"></canvas>' : ''}
+      <div><h2>${def.icon} ${def.title}</h2><p>${rich(text)}</p>
+      ${h ? `<p class="small dim">${trustLabel(h).icon} ${esc(h.name.split(' ')[0])} ${trustLabel(h).text}.</p>` : ''}</div></div>
+      ${next ? `<button class="wide" data-act="request">🙋 Nächster Besucher ›</button>` : ''}
+      <button class="wide link" data-act="close">${next ? 'Später' : 'Weiter'}</button>`);
+    const c = document.getElementById('portrait');
+    if (c && h) renderPortrait(c, h, performance.now());
   }
 
   showSettings() {
@@ -684,9 +723,13 @@ export class UI {
       case 'event': return this.showEvent();
       case 'request': return this.showRequest();
       case 'reload': this.game.save(); location.reload(); return;
-      case 'answer':
-        if (resolveRequest(s, Number(el.dataset.i))) { this.closeModal(); this.toast('Geantwortet.'); }
+      case 'answer': {
+        const q = this.currentRequest;
+        const text = resolveRequest(s, q, Number(el.dataset.i));
+        if (text) { this.game.save(); this.render(); return this.showRequestResult(q, text); }
+        if (!s.requests.includes(q)) this.closeModal(); // Anlass hat sich erledigt
         break;
+      }
       case 'biofull': this.bioFull = true; this.modal?.refresh?.(); return;
       case 'choose':
         if (resolveEvent(s, Number(el.dataset.i))) { this.closeModal(); this.toast('Entschieden!'); }

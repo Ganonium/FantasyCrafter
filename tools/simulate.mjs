@@ -18,9 +18,9 @@ const VISITS = [7 * 60, 10 * 60, 13 * 60, 17 * 60, 21 * 60]; // Uhrzeiten der Be
 
 function botVisit() {
   // Bitte: zufällige Antwort (außer der Vorgabe „keine Zeit“)
-  if (s.request) {
-    const n = requestOptions(s).length;
-    for (let tries = 0; tries < 5 && s.request; tries++) resolveRequest(s, Math.floor(Math.random() * Math.max(1, n - 1)));
+  for (const q of [...s.requests]) {
+    const n = requestOptions(s, q).length;
+    for (let tries = 0; tries < 5 && s.requests.includes(q); tries++) resolveRequest(s, q, Math.floor(Math.random() * Math.max(1, n - 1)));
   }
   // Ereignis: zufällige bezahlbare Option
   if (s.event) {

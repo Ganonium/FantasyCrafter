@@ -58,7 +58,9 @@ if (saved) {
 }
 if (urlSpeed > 0) game.speed = urlSpeed;
 
-const scene = new VillageScene(document.getElementById('scene'), (id) => ui.showHero(id));
+// Antippen in der Dorfszene: Wer am Tresen wartet, wird angehört – sonst öffnet sich die Heldenkarte
+const scene = new VillageScene(document.getElementById('scene'),
+  (id) => (game.state.requests.some((q) => q.data.hero === id) ? ui.showRequest(id) : ui.showHero(id)));
 const ui = new UI(game);
 document.getElementById('settings').addEventListener('click', () => ui.showSettings());
 document.getElementById('speed').addEventListener('click', () => ui.showSettings());

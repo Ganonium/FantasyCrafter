@@ -142,7 +142,12 @@ export class VillageScene {
       ctx.globalAlpha = a.alpha;
       drawHero(ctx, a.hero, a.x, a.y, { ...look, flip: a.flip, time, size: a.size });
       ctx.restore();
-      const top = a.y - a.size * (look.pose === 'sit' ? 1.05 : 1.25);
+      const hat = a.hero.cls === 'magier' && a.hero.armor ? 0.28 : 0;
+      const top = a.y - a.size * ((look.pose === 'sit' ? 1.05 : 1.25) + hat);
+      // Gedankenblase: Wer am Tresen wartet, fällt auf; sonst zeigt ein Symbol, was den Helden beschäftigt
+      const waiting = state.requests?.some((q) => q.data.hero === a.id);
+      const icon = waiting ? '❗' : look.eyes === 'closed' || this.night ? null : a.hero.thoughtIcon;
+      if (icon && a.alpha > 0.5 && !a.leaving) bubble(ctx, a.x + (a.flip ? -3 : 3), top - 1.5, icon, waiting, time + a.id * 700);
       if (look.eyes === 'closed' && a.alpha > 0.5) {
         const t = time / 900 + a.id;
         ctx.fillStyle = 'rgba(235,240,255,0.9)';
@@ -496,6 +501,25 @@ export class VillageScene {
 }
 
 // ---------- Zeichenhilfen ----------
+
+function bubble(ctx, x, y, icon, urgent, time) {
+  const bob = Math.sin(time / (urgent ? 260 : 900)) * (urgent ? 0.9 : 0.4);
+  const r = urgent ? 4.6 : 4;
+  const cy = y - r - 1.6 + bob;
+  ctx.save();
+  ctx.fillStyle = urgent ? '#ffd95a' : 'rgba(255,253,244,0.95)';
+  ctx.strokeStyle = LINE; ctx.lineWidth = 0.45;
+  // kleine Blasen als „Denk“-Spur, darüber die große
+  for (const [dx, dy, rr] of [[-1.6, r + 2.2, 0.6], [-0.6, r + 0.9, 0.95]]) {
+    ctx.beginPath(); ctx.arc(x + dx, cy + dy, rr, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+  }
+  ctx.beginPath(); ctx.arc(x, cy, r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+  ctx.font = `${urgent ? 5.4 : 4.6}px sans-serif`;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#2a1c14';
+  ctx.fillText(icon, x, cy + 0.4);
+  ctx.restore();
+}
 
 function box(ctx, x, y, w, h, fill, lw = LW) {
   ctx.fillStyle = fill;
