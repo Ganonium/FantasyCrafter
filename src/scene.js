@@ -1,14 +1,14 @@
 // Dorfszene auf Canvas (Vektorgrafik): Gebäude, Tageszeit und die Helden, die gerade im Dorf sind.
-// Logische Koordinaten 200 × 112, gerendert in voller Bildschirmauflösung.
+// Logische Koordinaten 200 × 124, gerendert in voller Bildschirmauflösung.
 
 import { drawHero, heroLook } from './sprites.js';
 import { RECIPES } from './data.js';
 import { clockOf, isNight } from './sim.js';
 
 export const W = 200;
-export const H = 112;
+export const H = 124;
 // Helden stehen in zwei Reihen auf dem Dorfplatz vor den Häusern
-const ROWS = [{ y: 106, size: 36 }, { y: 98, size: 32 }];
+const ROWS = [{ y: 119, size: 37 }, { y: 110, size: 33 }];
 const LINE = '#2a1c14';
 const LW = 0.45;
 
@@ -293,6 +293,33 @@ export class VillageScene {
     for (let i = 0; i < 26; i++) {
       ctx.beginPath(); ctx.ellipse((i * 23.7) % W, 94 + ((i * 7.3) % 9), 0.9, 0.5, 0, 0, Math.PI * 2); ctx.fill();
     }
+    // Blumen in der Wiese
+    const petals = ['#f4e06a', '#f08aa0', '#ffffff', '#b89af0'];
+    for (let i = 0; i < 22; i++) {
+      const x = (i * 47.9 + 5) % W, y = 82 + ((i * 11.3) % 9);
+      ctx.fillStyle = mix('#5a5a70', petals[i % 4], 0.25 + light * 0.75);
+      ctx.beginPath(); ctx.arc(x, y, 0.55, 0, Math.PI * 2); ctx.fill();
+    }
+    // Dorfplatz: Kopfsteinpflaster, auf dem die Helden stehen
+    const paveTop = (x) => 103.5 + Math.sin(x / 31) * 1.2;
+    ctx.beginPath(); ctx.moveTo(-5, paveTop(-5));
+    for (let x = 0; x <= 205; x += 5) ctx.lineTo(x, paveTop(x));
+    ctx.lineTo(205, H + 2); ctx.lineTo(-5, H + 2); ctx.closePath();
+    const pg = ctx.createLinearGradient(0, 102, 0, H);
+    pg.addColorStop(0, mix('#33302c', '#b9ad98', light)); pg.addColorStop(1, mix('#2a2824', '#a39782', light));
+    ctx.fillStyle = pg; ctx.fill();
+    ctx.strokeStyle = mix('#201e1c', '#857a68', light); ctx.lineWidth = 0.5; ctx.stroke();
+    const cobA = mix('#3c3934', '#cbc0aa', light), cobB = mix('#2e2c28', '#a99d88', light);
+    for (let row = 0; row < 7; row++) {
+      const y = 105.2 + row * 2.9;
+      const w = 5.2 + row * 0.35;
+      for (let i = -1; i < W / w + 1; i++) {
+        const x = i * w + (row % 2) * w * 0.5;
+        if (y < paveTop(x + w / 2) + 0.6) continue;
+        ctx.fillStyle = (i * 7 + row * 3) % 5 === 0 ? cobB : cobA;
+        ctx.beginPath(); ctx.roundRect(x + 0.35, y, w - 0.7, 2.3, 0.9); ctx.fill();
+      }
+    }
   }
 
   // ---------- Gebäude ----------
@@ -461,7 +488,7 @@ export class VillageScene {
     ctx.fillStyle = mix('#3a2818', '#8a5e36', light);
     ctx.fillRect(144, 83, 14, 1.4); ctx.fillRect(145, 84.4, 0.9, 2.2); ctx.fillRect(156, 84.4, 0.9, 2.2);
     // Büsche vorne
-    for (const [bx, by, r] of [[3, 110, 6], [196, 109, 7], [60, 111, 4]]) {
+    for (const [bx, by, r] of [[1, 104, 5], [199, 104, 5.5]]) {
       ctx.fillStyle = mix('#163020', '#4e8a3c', light);
       ctx.beginPath(); ctx.arc(bx, by, r, 0, Math.PI * 2); ctx.arc(bx + r * 0.8, by + 1, r * 0.7, 0, Math.PI * 2); ctx.fill();
     }

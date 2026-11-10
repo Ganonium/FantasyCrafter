@@ -305,6 +305,8 @@ function robe(ctx, sit, lift, torso, ar) {
   }
   ctx.closePath();
   shape(ctx, torso);
+  ctx.save(); ctx.clip(); bodyShade(ctx, -24, 30, -60, 0); ctx.restore();
+  ctx.strokeStyle = LINE; ctx.lineWidth = 3; ctx.stroke();
   ctx.strokeStyle = ar?.accent ?? shade(torso, -25); ctx.lineWidth = ar?.accent ? 5 : 4;
   ctx.beginPath(); ctx.moveTo(4, -58); ctx.lineTo(6, sit ? -34 : -2); ctx.stroke();
   if (ar?.accent) {
@@ -319,6 +321,17 @@ function robe(ctx, sit, lift, torso, ar) {
     ellipse(ctx, -8, -2, 7, 4); shape(ctx, BOOT, 2.5);
     ellipse(ctx, 10, -2, 7, 4); shape(ctx, BOOT, 2.5);
   }
+}
+
+// Rundung andeuten: Schatten am Rücken, Glanzlicht vorn, dunkler nach unten
+function bodyShade(ctx, x0, x1, y0, y1) {
+  const g = ctx.createLinearGradient(x0, 0, x1, 0);
+  g.addColorStop(0, 'rgba(30,15,10,0.26)'); g.addColorStop(0.4, 'rgba(30,15,10,0)');
+  g.addColorStop(0.72, 'rgba(255,255,255,0.14)'); g.addColorStop(1, 'rgba(30,15,10,0.1)');
+  ctx.fillStyle = g; ctx.fillRect(x0 - 2, y0 - 2, x1 - x0 + 4, y1 - y0 + 4);
+  const v = ctx.createLinearGradient(0, y0, 0, y1);
+  v.addColorStop(0.5, 'rgba(30,15,10,0)'); v.addColorStop(1, 'rgba(30,15,10,0.16)');
+  ctx.fillStyle = v; ctx.fillRect(x0 - 2, y0 - 2, x1 - x0 + 4, y1 - y0 + 4);
 }
 
 function potion(ctx, x, y) {
@@ -399,6 +412,7 @@ function torsoDetails(ctx, cls, tier, ar, torso) {
     ctx.strokeStyle = ar.accent; ctx.lineWidth = 3;
     ctx.beginPath(); ctx.moveTo(-12, -61); ctx.lineTo(12, -30); ctx.stroke();
   }
+  bodyShade(ctx, -15, 15, -61, -26);
   ctx.restore();
   rr(ctx, -15, -61, 30, 35, 10);
   ctx.strokeStyle = LINE; ctx.lineWidth = 3; ctx.stroke();
@@ -418,6 +432,11 @@ function head(ctx, skin, hair, look, hero, ar, face = {}) {
   // Ohr + Kopf
   ellipse(ctx, cx - 14, cy + 2, 4, 5); shape(ctx, skin, 2.5);
   ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); shape(ctx, skin);
+  { // weiches Licht von vorn oben, Schatten am Hinterkopf und Kinn
+    const g = ctx.createRadialGradient(cx + 7, cy - 8, 4, cx, cy, r);
+    g.addColorStop(0, 'rgba(255,250,235,0.22)'); g.addColorStop(0.55, 'rgba(255,250,235,0)'); g.addColorStop(1, 'rgba(110,50,40,0.28)');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, r - 1.4, 0, Math.PI * 2); ctx.fill();
+  }
   // Wangen
   ctx.fillStyle = 'rgba(220,90,80,0.25)';
   ellipse(ctx, cx + 13, cy + 7, 4, 2.5); ctx.fill();
@@ -567,7 +586,7 @@ function star(ctx, x, y, r, color) {
 function melee(ctx, tier, h, time) {
   ctx.save();
   ctx.translate(h.x, h.y);
-  ctx.rotate(0.5);
+  ctx.rotate(tier === 4 ? 0.16 : 0.5);
   meleeShape(ctx, tier, time);
   ctx.restore();
 }
@@ -577,13 +596,30 @@ function meleeShape(ctx, tier, time) {
   if (tier === 0) { // Knüppel
     ctx.beginPath(); ctx.moveTo(-3, 6); ctx.lineTo(-5, -28); ctx.quadraticCurveTo(0, -36, 5, -28); ctx.lineTo(3, 6); ctx.closePath();
     shape(ctx, '#7a5634', 2.5);
-  } else if (tier === 4) { // Trollspalter
-    rr(ctx, -2.5, -62, 5, 74, 2); shape(ctx, '#efe6cc', 2.5);
-    ctx.beginPath(); ctx.moveTo(2, -60); ctx.quadraticCurveTo(28, -66, 26, -38); ctx.quadraticCurveTo(18, -46, 2, -42); ctx.closePath();
-    const g = ctx.createLinearGradient(2, -60, 26, -40); g.addColorStop(0, '#5a5a66'); g.addColorStop(1, '#a8acb8');
+  } else if (tier === 4) { // Trollspalter: schwere Axt mit Knochenschaft
+    rr(ctx, -2.8, -70, 5.6, 84, 2.5); shape(ctx, '#efe6cc', 2.5);
+    ctx.strokeStyle = '#6a4630'; ctx.lineWidth = 2.2; // Lederwicklung am Griff
+    for (const yy of [-8, -3, 2, 7]) { ctx.beginPath(); ctx.moveTo(-2.8, yy); ctx.lineTo(2.8, yy - 2.5); ctx.stroke(); }
+    // Dorn auf der Rückseite
+    ctx.beginPath(); ctx.moveTo(-2, -64); ctx.lineTo(-15, -57); ctx.lineTo(-2, -50); ctx.closePath();
+    shape(ctx, '#7c808c', 2.5);
+    // Axtblatt mit geschwungener Schneide
+    ctx.beginPath();
+    ctx.moveTo(2, -66);
+    ctx.quadraticCurveTo(16, -66, 26, -78);
+    ctx.quadraticCurveTo(40, -56, 27, -33);
+    ctx.quadraticCurveTo(16, -46, 2, -47);
+    ctx.closePath();
+    const g = ctx.createLinearGradient(2, 0, 34, 0);
+    g.addColorStop(0, '#565a66'); g.addColorStop(0.6, '#9a9eac'); g.addColorStop(1, '#e8ecf2');
     shape(ctx, g, 2.5);
-    ctx.strokeStyle = '#d04a30'; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(25, -60); ctx.quadraticCurveTo(28, -50, 25, -40); ctx.stroke();
-    glow(ctx, 22, -50, 16, '255,110,60', time);
+    // geschliffene Schneide und Glutrune
+    ctx.strokeStyle = 'rgba(255,255,255,0.75)'; ctx.lineWidth = 1.6;
+    ctx.beginPath(); ctx.moveTo(26.5, -74); ctx.quadraticCurveTo(36, -56, 27, -37); ctx.stroke();
+    ctx.strokeStyle = '#ff7a3a'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(9, -61); ctx.lineTo(15, -56); ctx.lineTo(9, -52); ctx.moveTo(15, -56); ctx.lineTo(20, -56); ctx.stroke();
+    rr(ctx, -4, -68, 8, 22, 2); shape(ctx, '#3c3e48', 2); // Fassung
+    glow(ctx, 14, -56, 15, '255,110,60', time);
   } else { // Schwerter
     const len = [0, 26, 40, 46][tier];
     const blade = ['', '#c4cad0', '#e6eaee', '#a8dcff'][tier];
