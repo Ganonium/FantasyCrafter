@@ -49,7 +49,7 @@ header .title { font-size: 14px; white-space: nowrap; overflow: hidden; text-ove
 #scene {
   display: block;
   width: 100%;
-  aspect-ratio: 200 / 112;
+  aspect-ratio: 200 / 124;
   border-bottom: 2px solid var(--line);
   cursor: pointer;
 }
