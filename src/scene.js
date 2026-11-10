@@ -102,6 +102,7 @@ export class VillageScene {
     this.windowsLit = [];
 
     this.drawSky(ctx, minute, light, time);
+    this.dragonGone = (state.deeds ?? []).some((d) => d.id === 'vharzul');
     this.drawLandscape(ctx, light, time);
     const fx = new Set(activeEffects(state).map((e) => e.icon));
     if (state.projects.wachturm !== undefined) this.drawTower(ctx, light, time);
@@ -111,6 +112,8 @@ export class VillageScene {
     this.drawTavern(ctx, state, light);
     this.drawProps(ctx, state, light);
     this.drawProjects(ctx, state, light, time);
+    if ((state.deeds ?? []).length) this.drawTrophy(ctx, light, state.deeds.length);
+    if (state.threat?.deadline) this.drawOmen(ctx, state, light, time);
     if (fx.has('🏆') || fx.has('🎉')) this.drawBunting(ctx, light, time);
     if (fx.has('🎶') || state.projects.buehne !== undefined) this.drawNotes(ctx, time, fx.has('🎶'));
 
@@ -269,16 +272,18 @@ export class VillageScene {
     }
     // Drachenhorst
     peak(ctx, 146, 66, 62, 44, mix('#1e1e30', '#5a5670', light));
-    ctx.fillStyle = 'rgba(255,100,40,0.8)';
-    ctx.beginPath(); ctx.ellipse(177, 22.6, 2.4, 0.8, 0, 0, Math.PI * 2); ctx.fill();
-    const glowA = 0.25 + 0.1 * Math.sin(time / 700);
-    const dg = ctx.createRadialGradient(177, 22, 0, 177, 22, 9);
-    dg.addColorStop(0, `rgba(255,110,50,${glowA})`); dg.addColorStop(1, 'rgba(255,110,50,0)');
-    ctx.fillStyle = dg; ctx.fillRect(168, 13, 18, 18);
-    const t = time / 1000;
-    for (let i = 0; i < 5; i++) {
-      ctx.fillStyle = `rgba(90,90,100,${0.35 - i * 0.05})`;
-      ctx.beginPath(); ctx.arc(177 + Math.sin(t + i) * 1.5 + i * 1.2, 20 - i * 3.2, 1 + i * 0.5, 0, Math.PI * 2); ctx.fill();
+    if (!this.dragonGone) { // Glut und Rauch – solange der Drache lebt
+      ctx.fillStyle = 'rgba(255,100,40,0.8)';
+      ctx.beginPath(); ctx.ellipse(177, 22.6, 2.4, 0.8, 0, 0, Math.PI * 2); ctx.fill();
+      const glowA = 0.25 + 0.1 * Math.sin(time / 700);
+      const dg = ctx.createRadialGradient(177, 22, 0, 177, 22, 9);
+      dg.addColorStop(0, `rgba(255,110,50,${glowA})`); dg.addColorStop(1, 'rgba(255,110,50,0)');
+      ctx.fillStyle = dg; ctx.fillRect(168, 13, 18, 18);
+      const t = time / 1000;
+      for (let i = 0; i < 5; i++) {
+        ctx.fillStyle = `rgba(90,90,100,${0.35 - i * 0.05})`;
+        ctx.beginPath(); ctx.arc(177 + Math.sin(t + i) * 1.5 + i * 1.2, 20 - i * 3.2, 1 + i * 0.5, 0, Math.PI * 2); ctx.fill();
+      }
     }
 
     // Hügel
@@ -350,6 +355,61 @@ export class VillageScene {
   }
 
   // ---------- Dorfprojekte und Ereignisse ----------
+
+  // Trophäe am Giebel der Taverne: ein gehörnter Schädel je bezwungenem Ungeheuer (höchstens drei)
+  drawTrophy(ctx, light, n) {
+    const bone = mix('#6a6658', '#f0e8d0', light);
+    for (let i = 0; i < Math.min(3, n); i++) {
+      const x = 167 + (i - (Math.min(3, n) - 1) / 2) * 7, y = 38.5 + Math.abs(i - (Math.min(3, n) - 1) / 2) * 3.4;
+      ctx.strokeStyle = bone; ctx.lineWidth = 0.7; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(x - 1.2, y - 0.6); ctx.quadraticCurveTo(x - 3.4, y - 1.2, x - 3, y - 3.4);
+      ctx.moveTo(x + 1.2, y - 0.6); ctx.quadraticCurveTo(x + 3.4, y - 1.2, x + 3, y - 3.4); ctx.stroke();
+      ctx.fillStyle = bone; ctx.strokeStyle = LINE; ctx.lineWidth = 0.3;
+      ctx.beginPath(); ctx.moveTo(x - 1.6, y - 1.2); ctx.lineTo(x + 1.6, y - 1.2); ctx.lineTo(x + 1, y + 1.4); ctx.lineTo(x, y + 2.4); ctx.lineTo(x - 1, y + 1.4); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#1a1210';
+      ctx.beginPath(); ctx.arc(x - 0.7, y - 0.1, 0.4, 0, Math.PI * 2); ctx.arc(x + 0.7, y - 0.1, 0.4, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+
+  // Die Bedrohung kündigt sich an: glutroter Himmel, je näher der Kampf, desto stärker; der Drache kreist über dem Horst
+  drawOmen(ctx, s, light, time) {
+    const t = s.threat;
+    const near = 1 - Math.max(0, Math.min(1, (t.deadline - s.t) / 2880));
+    const g = ctx.createLinearGradient(0, 0, 0, 72);
+    g.addColorStop(0, `rgba(150,30,20,${0.18 + near * 0.3})`); g.addColorStop(1, 'rgba(150,30,20,0)');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, 72);
+    if (t.id === 'vharzul') {
+      const a = time / 2600;
+      const x = 150 + Math.cos(a) * (30 - near * 8), y = 20 + Math.sin(a * 2) * 5 + near * 4;
+      const flap = Math.sin(time / 180) * 2.4;
+      const dir = -Math.sin(a) >= 0 ? 1 : -1;
+      const k = 0.8 + near * 0.9;
+      ctx.save(); ctx.translate(x, y); ctx.scale(dir * k, k);
+      ctx.fillStyle = mix('#0c0a12', '#2a1a1c', light);
+      ctx.beginPath(); // Rumpf mit Hals und Schwanz
+      ctx.moveTo(6, -0.6); ctx.quadraticCurveTo(3, -1.6, 0, -1); ctx.quadraticCurveTo(-4, -0.8, -8, 0.6);
+      ctx.quadraticCurveTo(-4, 0.8, 0, 1); ctx.quadraticCurveTo(3, 1.2, 6, 0.4); ctx.closePath(); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(1.5, -0.6); ctx.lineTo(-1, -5 - flap); ctx.lineTo(-3.5, -1.2 - flap * 0.4); ctx.lineTo(-1.5, -0.4); ctx.closePath(); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(1.5, 0.4); ctx.lineTo(0, 3.6 + flap * 0.6); ctx.lineTo(-2.6, 1 + flap * 0.3); ctx.closePath(); ctx.fill();
+      ctx.restore();
+    } else {
+      // dunkle Wolkenbank, die näher rückt
+      ctx.fillStyle = `rgba(30,20,34,${0.35 + near * 0.35})`;
+      for (let i = 0; i < 7; i++) {
+        const x = ((i * 37 + time * 0.002) % 240) - 20;
+        ctx.beginPath(); ctx.ellipse(x, 6 + (i % 3) * 5 + near * 6, 22, 5.5, 0, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+    if (t.prep.ballista) { // die Ballista auf dem Dorfplatz
+      const wood = mix('#3a2818', '#8a5e36', light);
+      ctx.strokeStyle = wood; ctx.lineWidth = 1; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(96, 103.5); ctx.lineTo(100, 96); ctx.lineTo(104, 103.5); ctx.stroke();
+      ctx.lineWidth = 0.9; ctx.beginPath(); ctx.moveTo(95, 98); ctx.lineTo(107, 92.5); ctx.stroke();
+      ctx.lineWidth = 0.6; ctx.beginPath(); ctx.moveTo(97, 93.5); ctx.quadraticCurveTo(101.5, 96.5, 104, 98.2); ctx.stroke();
+      ctx.strokeStyle = mix('#444450', '#d8d8e0', light); ctx.lineWidth = 0.5;
+      ctx.beginPath(); ctx.moveTo(98, 96.6); ctx.lineTo(109.5, 91.3); ctx.stroke();
+    }
+  }
 
   drawTower(ctx, light, time) {
     const stone = mix('#34322e', '#a8a094', light);

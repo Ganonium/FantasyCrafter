@@ -16,6 +16,8 @@ import { bio, bump } from './life.js';
 import { remember, recall, trustOf, changeTrust } from './memory.js';
 import { ROLES, farewellMood, wantsToSettle, housePrice, settle, wander, leaveBitter, daysHere } from './farewell.js';
 import { loseTrait } from './life.js';
+import { SAGAS, sagaStep } from './sagas.js';
+import { WAVER, threatDef } from './threat.js';
 import { makeRng } from './rng.js';
 
 const H = 60;
@@ -593,6 +595,25 @@ export const REQUESTS = {
       return opts;
     },
   },
+
+  // Mehrtägige Geschichten (sagas.js): Die Entscheidungen einer laufenden Geschichte kommen als Besucher
+  saga: {
+    icon: '📜', title: 'Eine Geschichte',
+    find: () => null,
+    meta: (d) => ({ icon: SAGAS[d.saga].icon, title: SAGAS[d.saga].title }),
+    valid: (s, d) => !!sagaStep(s, d),
+    text: (s, d) => { const x = sagaStep(s, d); return x.step.text(s, x.g); },
+    options: (s, d) => { const x = sagaStep(s, d); return x ? x.step.options(s, x.g) : []; },
+  },
+
+  // Die große Bedrohung (threat.js): Ein Held zögert vor dem Kampf
+  threat: {
+    icon: WAVER.icon, title: WAVER.title,
+    find: () => null,
+    valid: (s) => !!s.threat && s.threat.deadline !== null,
+    text: (s, d) => WAVER.text(s, d),
+    options: (s, d) => (threatDef(s) ? WAVER.options(s, d) : []),
+  },
 };
 
 // ---------- Ablauf ----------
@@ -618,12 +639,25 @@ export function offerLastItem(s, r, a, recipe) {
   return true;
 }
 
+// Besucher, die nicht von selbst kommen, sondern von einer Geschichte geschickt werden.
+// Sie dürfen auch dann noch dazu, wenn schon drei warten.
+export function addVisitor(s, type, data, wait = WAIT) {
+  s.requests.push({ type, data, t: s.t, expires: s.t + wait });
+}
+
+// Symbol und Überschrift eines Besuchs (Geschichten bringen ihre eigenen mit)
+export function requestMeta(q) {
+  const def = REQUESTS[q.type];
+  return def.meta ? def.meta(q.data) : { icon: def.icon, title: def.title };
+}
+
 export function requestFor(s, heroId) {
   return s.requests.find((q) => q.data.hero === heroId) ?? null;
 }
 
 export function requestOptions(s, q = s.requests[0]) {
-  return q ? REQUESTS[q.type].options(s, q.data) : [];
+  // Ist der Besucher inzwischen fort oder der Anlass erledigt, gibt es nichts mehr zu beantworten
+  return q && requestValid(s, q) ? REQUESTS[q.type].options(s, q.data) : [];
 }
 
 export function requestValid(s, q) {
@@ -645,7 +679,7 @@ export function resolveRequest(s, q, index, auto = false, r = makeRng(s)) {
   drop();
   // Wer vergeblich wartet, merkt sich das ein wenig
   if (auto) { const h = hero(s, q.data.hero); if (h) changeTrust(h, -2); }
-  log(s, 'request', `${REQUESTS[q.type].icon} ${auto ? 'Du warst nicht da. ' : ''}${text}`, q.data.hero);
+  log(s, 'request', `${requestMeta(q).icon} ${auto ? 'Du warst nicht da. ' : ''}${text}`, q.data.hero);
   return text;
 }
 

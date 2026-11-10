@@ -138,6 +138,35 @@ Hintergrund der Dorfszene, geben manchmal Bestellungen auf und sind im Tab „Do
 Die **Dorfchronik** (Tab „Dorf“) bewahrt jeden Helden, der einmal hier war: Stufe, Schicksal, Zeit im Dorf und die
 wichtigsten Seiten seines Heldenbuchs. Ein freies Zimmer zieht bald einen neuen Helden an.
 
+## Mehrtägige Geschichten
+
+Etwa alle zwei bis vier Tage beginnt eine Geschichte, die sich über Stunden oder Tage zieht (`src/sagas.js`). Es läuft
+immer nur eine zugleich. Ihre Entscheidungen kommen als Besucher an den Tresen, der Ausgang steht in Chronik und Heldenbuch.
+
+| Geschichte | Auslöser | Deine Entscheidung | Ausgang |
+|---|---|---|---|
+| 🕯️ Verschollen | Ein Held kehrt aus einem gefährlichen Gebiet nicht zurück (ohne Heiltrank deutlich öfter) | Einen Freund auf die Suche schicken (60 Gold), Kopfgeld für Hinweise (150 Gold) oder abwarten | Gerettet: leicht verletzt, tiefe Dankbarkeit, Freundschaft mit dem Retter. Allein zurück: schwer verletzt, fühlt sich im Stich gelassen. |
+| 🔥 Eine offene Rechnung | Ein Held hat sich von einer schweren Niederlage erholt und schwört Rache | Ausrüsten (40 Gold, Heiltrank), ausreden oder schulterzucken | Sieg tilgt die Narbe; eine Niederlage nach deinem Zuspruch geht auf deine Kappe. |
+| 🗺️ Eine alte Karte | Ein Held findet unterwegs eine Schatzkarte fürs nächstschwerere Gebiet | Zur Suche raten (allein oder mit einem Freund), die Karte abkaufen (Gebiet bringt allen 12 Std. dreifach Gold) oder abraten | Schatz: viel Gold für den Helden, bei Vertrauen seltene Materialien für dich. Reinfall: Er gibt dir die Schuld. |
+
+## Die große Gefahr (Finale und Kapitel)
+
+Wurde der Drachenhorst dreimal geplündert, erwacht **Vharzul, der Aschenfürst** (`src/threat.js`). Das Dorf hat zwei
+Tage Zeit, sich zu rüsten – dann stellen sich alle Helden, die im Dorf sind, gemeinsam zum Kampf.
+
+- **Stärke des Dorfes**: Kraft der Kämpfer × Vorbereitungen × Kampfmoral (Laune) × Rückhalt (Dorfbewohner). Die Stärke
+  der Gefahr bemisst sich an den Helden, die beim Erwachen da sind – sie ist immer eine echte Prüfung.
+- **Vorbereitungen** kosten Gold (das Ziel für angespartes Gold; je Kapitel 50 % teurer): Klingen schärfen (+15 %),
+  Heiltränke für alle (leichtere Verletzungen), Palisaden (halber Schaden am Dorf), Ballista (+35 %).
+- **Ein Held zögert** und fragt dich: an die Front oder das Dorf schützen (zählt nicht zur Stärke, mindert aber Schäden)?
+- **Ausgang**: glänzender Sieg, schwer erkämpfter Sieg, vertrieben (das Ungeheuer kehrt nach 3–4 Tagen geschwächt
+  zurück) oder Niederlage (Gold und Waren gehen verloren, es kehrt ebenfalls zurück). Vorbereitungen bleiben erhalten.
+- **Nach dem Sieg**: Der stärkste Kämpfer trägt einen Ehrentitel (z. B. Drachentöterin), das Dorf bekommt eine Trophäe
+  am Tavernengiebel, die Tat steht unter „Große Taten“ in der Dorfchronik, und ein neues Kapitel beginnt. Nach 12–16
+  Tagen regt sich die nächste Gefahr (Frostwurm, Trollkönig, Spinnenmutter, dann von vorn – jedes Mal stärker).
+- In der Szene: glutroter Himmel, der Drache kreist über dem Horst, die Ballista steht auf dem Dorfplatz. Nach Vharzuls
+  Ende erlischt die Glut am Drachenhorst.
+
 ## Gedankenblasen
 
 Über den Helden in der Dorfszene zeigt ein kleines Symbol, was sie gerade beschäftigt: 🛒 will etwas, das zu teuer ist,
@@ -206,7 +235,7 @@ Einträge in der Warteschlange lassen sich nach vorne schieben.
 
 ## Ziele und Dorfprojekte
 
-- **Ziele**: eine Kette von 19 Zielen (vom ersten Verkauf über den Helden in voller Drachenausrüstung bis zur gefüllten Dorfchronik) mit Belohnungen.
+- **Ziele**: eine Kette von 21 Zielen (vom ersten Verkauf über den Helden in voller Drachenausrüstung und die gefüllte Dorfchronik bis zu den großen Gefahren) mit Belohnungen.
   Das aktuelle Ziel steht oben in der Chronik und im Dorf-Tab.
 - **Dorfprojekte**: einmalige Gold-Investitionen mit dauerhaftem Bonus: Dorfbrunnen, Heilerhütte, Marktplatz,
   Wachturm, Bardenbühne, Heldendenkmal (250 bis 3.000 Gold).
@@ -253,10 +282,8 @@ wiederholt. Dazu kommen Varianten nach Tageszeit, Schatzjagd-Texte und Nachsätz
 
 ## Ideen für später
 
-- **Großes Ziel**: der Drache als einmaliges Finale, danach ein neues Kapitel (Dorfchronik bleibt)
-- **Wohin mit dem Gold**: Der Spieler häuft im späten Spiel viel Gold an, für das es noch kein Ziel gibt
 - **Weitere Quest-Arten**: Monsterjagd, Eskorte, Rettungsmission für einen verschollenen Helden
 - **Mehr Beziehungen**: Liebe, Lehrer und Schüler, Gruppen aus mehr als zwei Helden
-- **Mehr Ereignisse**: Drachenangriff aufs Dorf, Ketten-Ereignisse über mehrere Tage
+- **Mehr Geschichten**: weitere mehrtägige Fäden (Liebe, Erbschaft, ein Fremder mit Geheimnis), Briefe von Fortgezogenen
 - **Legendäre Gegenstände** mit Namen, Verzauberungen
 - Mehr Werkstätten (Alchemist, Gerberei, Runenschnitzer) und Zwischenprodukte

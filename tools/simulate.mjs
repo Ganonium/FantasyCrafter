@@ -7,6 +7,7 @@ import { RECIPES, MATERIALS, AREAS } from '../src/data.js';
 import { EVENT_BY_ID } from '../src/events.js';
 import { PROJECTS } from '../src/goals.js';
 import { requestOptions, resolveRequest } from '../src/requests.js';
+import { PREPS, buyPrep, prepCost } from '../src/threat.js';
 
 const days = Number(process.argv[2] ?? 14);
 const seed = Number(process.argv[3] ?? 42);
@@ -22,6 +23,8 @@ function botVisit() {
     const n = requestOptions(s, q).length;
     for (let tries = 0; tries < 5 && s.requests.includes(q); tries++) resolveRequest(s, q, Math.floor(Math.random() * Math.max(1, n - 1)));
   }
+  // Bedrohung: vorbereiten, was die Kasse hergibt (ein Polster bleibt)
+  if (s.threat?.deadline) for (const id of Object.keys(PREPS)) if (!s.threat.prep[id] && s.gold > prepCost(s, id) + 300) buyPrep(s, id);
   // Ereignis: zufällige bezahlbare Option
   if (s.event) {
     const n = EVENT_BY_ID[s.event.id].options.length;

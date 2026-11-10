@@ -117,7 +117,7 @@ export function retireHero(s, r, h, fate) {
   const friends = friendsOf(s, h);
   s.legacy ??= [];
   s.legacy.push({
-    id: h.id, name: h.name, female: h.female, cls: h.cls, look: h.look, level: h.level,
+    id: h.id, name: h.name, title: h.title ?? null, female: h.female, cls: h.cls, look: h.look, level: h.level,
     weapon: h.weapon, armor: h.armor, power: heroPower(h),
     fate, role: role?.id ?? null, t: s.t, c: s.clock0 + s.clockOffset + s.t,
     days: Math.max(1, Math.round(daysHere(s, h))), adventures: h.adventures, successes: h.successes,

@@ -15,6 +15,8 @@ import {
 import { bio, bump, life, checkGrowth, growTrait, traitThreshold, traitDrive, moodBaseline } from './life.js';
 import { processRequests, offerLastItem } from './requests.js';
 import { villagers, villagerMods, hasRole, leaveBitter, ROLES } from './farewell.js';
+import { sagaIntercept, sagaAfterTrip, questArea, processSagas } from './sagas.js';
+import { processThreat } from './threat.js';
 import { remember, scarredIn, freshScar, memoryThought, trustOf, changeTrust, fadeTrust } from './memory.js';
 
 export const SAVE_VERSION = 3;
@@ -75,6 +77,11 @@ function addV2Fields(s) {
   s.relations ??= {};
   // Besucher am Tresen: früher eine einzelne Bitte, jetzt eine kleine Warteschlange
   s.legacy ??= [];
+  s.saga ??= null;
+  s.nextSagaAt ??= Math.max(s.t, 2 * 1440);
+  s.threat ??= null;
+  s.deeds ??= [];
+  s.chapter ??= 0;
   s.requests ??= s.request ? [s.request] : [];
   delete s.request;
   s.nextRequest ??= s.t + 240;
@@ -181,8 +188,9 @@ export function say(s, r, key, arr) {
   return arr[idx];
 }
 
+let dragonSlain = false; // wird in advance() aus dem Spielstand gesetzt
 function areaVars(areaId, extra = {}) {
-  const a = AREAS[areaId];
+  const a = areaId === 'drachenhorst' && dragonSlain ? { ...AREAS[areaId], foe: 'die verwaiste Drachenbrut' } : AREAS[areaId];
   const In = a.in.charAt(0).toUpperCase() + a.in.slice(1);
   return { A: a.name, zu: a.zu, in: a.in, In, aus: a.aus, F: a.foe, M: a.mat ? MATERIALS[a.mat].name : 'Gold', ...extra };
 }
@@ -368,9 +376,12 @@ export function evaluateAreas(s, h, { power = heroPower(h) } = {}) {
     // Dein Rat: Ermutigt traut sich der Held (fast) alles zu, abgeraten meidet er das Gebiet
     const advice = h.advice && h.advice.until > s.t && h.advice.area === id ? h.advice.type : null;
     if (advice === 'encouraged') threshold = Math.min(threshold, Math.max(0.15, p - 0.01));
+    const quest = questArea(s, h, id);
+    if (quest) threshold = Math.min(threshold, Math.max(0.1, p - 0.01));
 
     let value = p * (avgGold + bountyValue * greed) * goal.value;
     if (advice === 'encouraged') value *= 3;
+    if (quest) value *= 5;
     if (h.fav === id) value *= 1.4;
     if (has(h, 'ruhmsuechtig')) value *= 1 + a.danger / 50;
     // Unterforderung: Wer viel zu stark ist, hat wenig Lust auf Kleinkram
@@ -382,7 +393,7 @@ export function evaluateAreas(s, h, { power = heroPower(h) } = {}) {
     else if (advice === 'discouraged') block = 'advice';
     else if (p < threshold) block = 'danger';
     // Die Narbe: dorthin nur noch mit Heiltrank (am Gürtel oder aus deinem Regal)
-    else if (needsPotionFor(s, h, id)) block = 'scar';
+    else if (!quest && needsPotionFor(s, h, id)) block = 'scar';
     res.push({ id, p, value, threshold, bountyValue, block });
   }
   return res;
@@ -522,6 +533,7 @@ function think(s, r, h) {
   goChance += goalDrive(s, h) + traitDrive(h);
   if ((h.challengeUntil ?? 0) > s.t) goChance += 0.15;
   if (best && h.advice?.type === 'encouraged' && h.advice.area === best.id) goChance += 0.3;
+  if (best && questArea(s, h, best.id)) goChance += 0.5;
   goChance = Math.max(0.05, Math.min(0.95, goChance));
 
   // Mit einem Freund trauen sich Helden mehr zu – und haben öfter Lust
@@ -679,7 +691,8 @@ function returnHome(s, r, h, opts = {}) {
   const notable = !opts.quiet && (h.bountyTrip || !success);
 
   // eine kleine Geschichte von unterwegs
-  if (notable && r.chance(0.6)) log(s, 'story', fmt(say(s, r, 'story.' + h.area, T.story[h.area]), h, v), h.id);
+  const tales = h.area === 'drachenhorst' && dragonSlain ? 'drachenhorstDanach' : h.area;
+  if (notable && r.chance(0.6)) log(s, 'story', fmt(say(s, r, 'story.' + tales, T.story[tales]), h, v), h.id);
   let gold = 0;
   let xp = 0;
   let pieces = 0;
@@ -800,9 +813,11 @@ function returnHome(s, r, h, opts = {}) {
   // Taverne kostet
   const tavern = Math.min(h.gold, 4 + h.level * 2);
   h.gold -= tavern;
+  const tripArea = h.area;
   h.area = null;
   h.bountyTrip = false;
   setThought(h, h.state === 'injured' ? r.pick(THOUGHTS.injured) : r.pick(THOUGHTS.resting));
+  sagaAfterTrip(s, r, h, tripArea, success);
   if (mentor && h.level >= mentor.level - 1) graduate(s, r, h, mentor);
   repayDebt(s, h);
   checkHeroGoal(s, r, h);
@@ -1227,6 +1242,7 @@ function stepMinute(s, r) {
 
   for (const h of [...s.heroes]) {
     if (h.state === 'away' && s.t >= h.until) {
+      if (sagaIntercept(s, r, h)) continue;
       const partner = h.partyWith ? s.heroes.find((x) => x.id === h.partyWith) : null;
       if (partner && partner.state === 'away' && partner.partyWith === h.id) returnParty(s, r, h, partner);
       else returnHome(s, r, h);
@@ -1288,6 +1304,8 @@ function stepMinute(s, r) {
   processOrders(s, r);
   processEvents(s, r);
   processRequests(s, r);
+  processSagas(s, r);
+  processThreat(s, r);
   if (s.t % 60 === 0) checkDebts(s, r);
   checkGoals(s);
   if (s.t % 60 === 0) s.effects = s.effects.filter((e) => e.until > s.t);
@@ -1295,7 +1313,10 @@ function stepMinute(s, r) {
 
 export function advance(s, minutes) {
   const r = makeRng(s);
-  for (let i = 0; i < minutes; i++) stepMinute(s, r);
+  for (let i = 0; i < minutes; i++) {
+    dragonSlain = s.deeds.some((d) => d.id === 'vharzul');
+    stepMinute(s, r);
+  }
 }
 
 // Nach Spieleraktionen: Ziele sofort prüfen
