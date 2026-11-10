@@ -107,6 +107,7 @@ export function heroLook(hero, night = false) {
     dirty: resting || hurt,
     mug: resting && !night,
     mood: hero.mood ?? 60,
+    civil: !!hero.civil, // Dorfbewohner: ohne Waffe
   };
 }
 
@@ -247,9 +248,10 @@ export function drawHero(ctx, hero, x, y, opts = {}) {
   } else {
     const reach = hero.cls === 'waldlaeufer' && wt > 0 ? 21 : 24;
     const hand = { x: reach, y: -37 };
-    if (hero.cls === 'waldlaeufer' && wt > 0) bow(ctx, wt, hand, time);
-    if (hero.cls === 'magier' && wt > 0) staff(ctx, wt, hand, time, lift);
-    if (hero.cls === 'krieger' || wt === 0) melee(ctx, wt, hand, time);
+    if (opts.civil) { /* nichts in der Hand */ }
+    else if (hero.cls === 'waldlaeufer' && wt > 0) bow(ctx, wt, hand, time);
+    else if (hero.cls === 'magier' && wt > 0) staff(ctx, wt, hand, time);
+    else melee(ctx, wt, hand, time);
     capsule(ctx, 9, -54, hand.x, hand.y, 9, arm);
     ellipse(ctx, hand.x, hand.y, 5, 5); shape(ctx, skin, 2.5);
   }

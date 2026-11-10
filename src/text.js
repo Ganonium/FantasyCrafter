@@ -180,11 +180,6 @@ export const T = {
     '{n} hat von deinem Laden gehört und will sich hier niederlassen.',
     'Mit einer Postkutsche kommt {n} in Eichenfurt an.',
   ],
-  leave: [
-    '{n} hat genug. „Dieses Dorf bringt mir kein Glück.“ {Er} zieht weiter.',
-    '{n} packt die Sachen und verlässt Eichenfurt – schlecht gelaunt.',
-    '{n} ist fort. Auf dem Kopfkissen liegt ein Zettel: „Nie wieder.“',
-  ],
   // Tavernengeplauder: freundlich stärkt Freundschaften, gereizt schürt Rivalitäten
   banterFriendly: [
     '{n} und {o} singen ein Lied. Schief, aber laut.',
@@ -217,7 +212,6 @@ export const T = {
     '⚔️ Zwischen {n} und {o} herrscht jetzt offene Rivalität.',
     '⚔️ {n} und {o} können sich nicht mehr ausstehen. Jeder will besser sein als der andere.',
   ],
-  friendLeft: ['{n} vermisst {o}. Die Taverne ist nicht mehr dieselbe.'],
   // Gemeinsame Ausflüge von Freunden
   partyDepart: [
     '{n} und {o} ziehen gemeinsam {zu}. Allein hätte sich keiner getraut.',

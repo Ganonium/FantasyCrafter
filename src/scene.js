@@ -4,6 +4,8 @@
 import { drawHero, heroLook } from './sprites.js';
 import { RECIPES } from './data.js';
 import { clockOf, isNight, activeEffects } from './sim.js';
+import { villagers } from './farewell.js';
+import { legacyHero } from './ui.js';
 
 export const W = 200;
 export const H = 124;
@@ -30,7 +32,10 @@ export class VillageScene {
       const hit = [...this.actors.values()]
         .filter((a) => a.alpha > 0.5 && Math.abs(x - a.x) <= a.size * 0.38 && y >= a.y - a.size * 1.3 && y <= a.y + 2)
         .sort((a, b) => b.y - a.y)[0];
-      if (hit) onHeroTap(hit.id);
+      if (hit) return onHeroTap(hit.id);
+      // dahinter: Dorfbewohner
+      const v = (this.villagerSpots ?? []).find((p) => Math.abs(x - p.x) <= 5 && y >= p.y - 30 && y <= p.y + 2);
+      if (v) onHeroTap(v.id, 'legacy');
     });
     this.resize();
     window.addEventListener('resize', () => this.resize());
@@ -137,6 +142,17 @@ export class VillageScene {
         ctx.fillStyle = `rgba(255,205,110,${0.85 * strength})`;
         ctx.beginPath(); ctx.roundRect(wdw[0], wdw[1], wdw[2], wdw[3], 0.6); ctx.fill();
       }
+    }
+
+    // Dorfbewohner (sesshaft gewordene Helden) gehen im Hintergrund ihrem Tagwerk nach; nachts sind sie zu Hause
+    this.villagerSpots = [];
+    if (!this.night) {
+      const spots = [[40, 99], [88, 100], [150, 99], [172, 100]];
+      villagers(state).slice(-spots.length).forEach((l, i) => {
+        const [vx, vy] = spots[i];
+        drawHero(ctx, legacyHero(l), vx, vy, { ...heroLook(legacyHero(l)), flip: vx > 100, time, size: 23 });
+        this.villagerSpots.push({ id: l.id, x: vx, y: vy });
+      });
     }
 
     // Vordergrund: die Helden, nach Tiefe sortiert. Sie bleiben auch nachts gut erkennbar.

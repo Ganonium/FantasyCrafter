@@ -57,25 +57,12 @@ export function banter(s, r, a, b) {
   if (r.chance(Math.max(0.1, Math.min(0.92, friendly)))) {
     log(s, 'banter', fmt(say(s, r, 'banterFriendly', T.banterFriendly), a, { o: `**${b.name}**` }), a.id);
     changeMood(a, 3); changeMood(b, 3);
-    changeRelation(s, r, a, b, r.int(6, 11));
+    changeRelation(s, r, a, b, r.int(9, 15));
   } else {
     log(s, 'banter', fmt(say(s, r, 'banterRival', T.banterRival), a, { o: `**${b.name}**` }), a.id);
     changeMood(a, -1); changeMood(b, -1);
-    changeRelation(s, r, a, b, -r.int(6, 11));
+    changeRelation(s, r, a, b, -r.int(8, 13));
   }
-}
-
-// Wenn ein Held das Dorf verlässt: Freunde trauern, Beziehungen verschwinden
-export function heroLeft(s, r, h) {
-  for (const f of friendsOf(s, h)) {
-    changeMood(f, -12);
-    bump(f, 'bitterness');
-    log(s, 'social', fmt(say(s, r, 'friendLeft', T.friendLeft), f, { o: `**${h.name}**` }), f.id);
-    bio(s, f, '💔', `Verlor ${h.female ? 'die Freundin' : 'den Freund'} ${h.name} – ${h.female ? 'sie' : 'er'} hat Eichenfurt verlassen.`);
-  }
-  for (const o of s.heroes) if (o.mentor === h.id) { o.mentor = null; bio(s, o, '🎓', `Verlor ${h.female ? 'die Lehrmeisterin' : 'den Lehrmeister'} ${h.name}.`); }
-  if (h.debt) log(s, 'loan', `💰 Mit **${h.name}** verschwinden auch ${h.debt.amount} Gold Vorschuss.`, h.id);
-  for (const k of Object.keys(s.relations)) if (k.split('-').map(Number).includes(h.id)) delete s.relations[k];
 }
 
 // ---------- Gemeinsame Ausflüge ----------
