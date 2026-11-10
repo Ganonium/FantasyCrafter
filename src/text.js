@@ -301,5 +301,7 @@ export const THOUGHTS = {
   wantItem: ['{x} wäre was für mich – aber {p} Gold hab ich nicht.'],
   tooExpensive: ['{x} für {p} Gold? Wucher!', '{x} gefällt mir, aber nicht zu dem Preis.'],
   going: ['Los geht\'s – {zu}!', 'Ich zieh {zu}. Bis später!'],
+  scar: ['{A}? Nach dem letzten Mal nur noch mit Heiltrank im Gepäck.', 'Ohne Heiltrank setz ich keinen Fuß mehr {zu}.'],
+  grudge: ['Bei dem kauf ich so schnell nichts mehr.', 'Der Amboss? Nach allem, was war? Erst mal nicht.'],
   goingBounty: ['Das Kopfgeld auf {M} hol ich mir!'],
 };

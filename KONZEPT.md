@@ -83,10 +83,12 @@ bezwingen, der Geizige Gold ansparen, der Vorsichtige wünscht sich eine bestimm
 Entscheidungen (z. B. lockt das Wunsch-Gebiet). Erfüllt er sich, ist der Held überglücklich (🌟 in der Chronik).
 In Werkstatt und Laden steht 🌟 an Helden, die sich genau dieses Teil wünschen – so kannst du gezielt Träume erfüllen.
 
-## Persönliche Bitten
+## Besucher am Tresen
 
-Etwa alle 4–8 Stunden kommt tagsüber ein Held mit einer Bitte an deinen Tresen (🙋 im Banner). Er wartet 5 Stunden,
-danach gilt die letzte Antwort. Deine Antwort hat Folgen, oft erst später sichtbar:
+Tagsüber kommt etwa alle 1,5–3 Stunden ein Held zu dir an den Tresen (🙋 im Banner, ❗-Blase über dem Helden in der
+Dorfszene – Antippen öffnet das Gespräch). Bis zu drei Besucher warten gleichzeitig, jeder 10 Stunden; danach gilt die
+letzte Antwort. So gibt es bei jedem kurzen Blick ins Spiel ein, zwei kleine Entscheidungen. Nach der Antwort siehst du
+sofort, was passiert ist. Deine Antwort hat Folgen, oft erst später sichtbar:
 
 | Bitte | Antworten und Folgen |
 |---|---|
@@ -94,6 +96,30 @@ danach gilt die letzte Antwort. Deine Antwort hat Folgen, oft erst später sicht
 | 💰 Vorschuss für ein Teil aus deinem Regal | **Vorstrecken**: Er kauft sofort und zahlt zurück, sobald er kann – oder bleibt es schuldig. **Ablehnen**: Enttäuschung. |
 | 💢 Streit zweier Rivalen im Laden | **Schlichten** (eine Runde ausgeben): Sie kommen sich näher. **Anheizen**: 12 Std. Wettstreit, beide gehen mehr Risiko ein. **Raushalten**. |
 | 🎓 Eine Lehre vermitteln (Junger Held ↔ Veteran) | **Vermitteln** (Lehrgeld): Der Lehrling lernt 60 % schneller und übernimmt beim Auslernen vielleicht einen Wesenszug des Lehrmeisters. |
+| 📣 Frisch vom Abenteuer (erster Sieg oder knapper Ausgang) | **„Erzähl mehr!“**: bestärkt, wagt 8 Std. mehr. **Zur Vorsicht mahnen**: kauft einen Heiltrank. |
+| 💛 Ein Dankeschön (dein Heiltrank, dein Rat, deine Ware) | **Annehmen** oder **eine Runde aufs Haus** (gute Laune im ganzen Dorf). |
+| ⚖️ Das letzte Stück (zwei wollen dasselbe Teil) | **Einem geben**: Der eine dankt es dir, der andere merkt es sich. **Münze werfen**: gerecht. |
+| 😠 Ein Wörtchen mit dir (dein Rat ging schief) | **Entschuldigen und Heiler bezahlen**, **„Deine Entscheidung“** (Abgehärtete respektieren das) oder **Schweigen**. |
+| 🎁 Sehnsüchtige Blicke (Ausrüstung zerbrochen, kein Gold für Ersatz) | **Schenken**, **halber Preis** oder **nichts sagen**. |
+| 🧪 Nicht ohne Heiltrank (will zurück an den Ort der Niederlage, ist aber blank) | **Schenken**, **anschreiben** oder **ablehnen**. |
+
+## Erinnerungen und Verhältnis zu dir
+
+Helden merken sich, was sie erlebt haben und wie du mit ihnen umgegangen bist (`src/memory.js`). Die Heldenkarte zeigt
+unter „Verhältnis zu dir“, woran sie sich erinnern. Erinnerungen tauchen als Gedanken wieder auf und lösen Besuche aus.
+
+- **Narbe**: Wer in einem Gebiet schwer verletzt wurde, geht dort eine Woche lang nur mit Heiltrank hin (kauft ihn
+  vor dem Aufbruch bei dir) und ist drei Tage zögerlicher.
+- **Vertrauen** (−100 … 100) wächst durch gute Ware, gerettete Leben, guten Rat, Geschenke und Zuhören; es sinkt durch
+  schlechten Rat, Abfuhren und Bevorzugung anderer.
+- **Wer dir vertraut** (ab 40), bringt dir manchmal seltene Materialien mit. **Wer dir etwas nachträgt** (ab −30),
+  kauft nur widerwillig bei dir und fragt dich nicht mehr um Rat.
+
+## Gedankenblasen
+
+Über den Helden in der Dorfszene zeigt ein kleines Symbol, was sie gerade beschäftigt: 🛒 will etwas, das zu teuer ist,
+😨 traut sich nicht, 🧪 braucht einen Heiltrank, 🌟 träumt vom Wunsch, 💭 erinnert sich, 💢 ärgert sich über den Rivalen,
+💛 sorgt sich um einen Freund, 🍺 hat keine Lust, ❗ wartet an deinem Tresen.
 
 ## Wesenswandel
 
@@ -207,5 +233,4 @@ wiederholt. Dazu kommen Varianten nach Tageszeit, Schatzjagd-Texte und Nachsätz
 - **Mehr Beziehungen**: Liebe, Lehrer und Schüler, Gruppen aus mehr als zwei Helden
 - **Mehr Ereignisse**: Drachenangriff aufs Dorf, Ketten-Ereignisse über mehrere Tage
 - **Legendäre Gegenstände** mit Namen, Verzauberungen
-- **Erinnerungen**: Helden merken sich, wer ihnen gute Ausrüstung verkauft hat und wo sie verletzt wurden
 - Mehr Werkstätten (Alchemist, Gerberei, Runenschnitzer) und Zwischenprodukte
