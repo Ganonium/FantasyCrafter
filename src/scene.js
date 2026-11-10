@@ -3,7 +3,7 @@
 
 import { drawHero, heroLook } from './sprites.js';
 import { RECIPES } from './data.js';
-import { clockOf, isNight } from './sim.js';
+import { clockOf, isNight, activeEffects } from './sim.js';
 
 export const W = 200;
 export const H = 124;
@@ -98,11 +98,16 @@ export class VillageScene {
 
     this.drawSky(ctx, minute, light, time);
     this.drawLandscape(ctx, light, time);
+    const fx = new Set(activeEffects(state).map((e) => e.icon));
+    if (state.projects.wachturm !== undefined) this.drawTower(ctx, light, time);
     this.drawSmithy(ctx, state, light);
     this.drawShop(ctx, state, light);
     this.drawBoard(ctx, state, light);
     this.drawTavern(ctx, state, light);
     this.drawProps(ctx, state, light);
+    this.drawProjects(ctx, state, light, time);
+    if (fx.has('🏆') || fx.has('🎉')) this.drawBunting(ctx, light, time);
+    if (fx.has('🎶') || state.projects.buehne !== undefined) this.drawNotes(ctx, time, fx.has('🎶'));
 
     // Rauch über der Esse
     const crafting = state.slots.some((s) => s && !s.blocked);
@@ -172,6 +177,7 @@ export class VillageScene {
       ctx.fillStyle = `rgba(12,16,46,${dark * 0.22})`;
       ctx.fillRect(0, 0, W, H);
     }
+    if (fx.has('🌧️')) this.drawRain(ctx, time);
     if (crafting) {
       const f = 0.6 + 0.4 * Math.sin(time / 110) * Math.sin(time / 43);
       ctx.save();
@@ -327,6 +333,115 @@ export class VillageScene {
     }
   }
 
+  // ---------- Dorfprojekte und Ereignisse ----------
+
+  drawTower(ctx, light, time) {
+    const stone = mix('#34322e', '#a8a094', light);
+    box(ctx, 125.5, 44, 7, 38, stone, 0.5);
+    ctx.fillStyle = mix('#28261f', '#8a8276', light);
+    for (let y = 48; y < 80; y += 5) ctx.fillRect(126.5 + ((y / 5) % 2) * 2.5, y, 2.4, 1.4);
+    box(ctx, 124.3, 40.5, 9.4, 4, stone, 0.5);
+    for (const x of [124.3, 127.9, 131.5]) box(ctx, x, 38.2, 2.2, 2.5, stone, 0.4);
+    ctx.fillStyle = '#1a1a22'; ctx.beginPath(); ctx.roundRect(128, 50, 2, 3.6, 1); ctx.fill();
+    // Wimpel
+    ctx.strokeStyle = LINE; ctx.lineWidth = 0.4;
+    ctx.beginPath(); ctx.moveTo(129, 38.2); ctx.lineTo(129, 31); ctx.stroke();
+    const wave = Math.sin(time / 500) * 0.6;
+    ctx.fillStyle = '#3f72d6'; ctx.beginPath(); ctx.moveTo(129, 31); ctx.lineTo(134.5, 32.2 + wave); ctx.lineTo(129, 34); ctx.closePath(); ctx.fill();
+  }
+
+  drawProjects(ctx, s, light, time) {
+    const has = (id) => s.projects[id] !== undefined;
+    const wood = mix('#3a2818', '#8a5e36', light);
+    if (has('heiler')) { // Zelt der Heilerin am linken Rand
+      ctx.beginPath(); ctx.moveTo(1, 103); ctx.lineTo(8, 91); ctx.lineTo(15, 103); ctx.closePath();
+      ctx.fillStyle = mix('#3c4a3c', '#eef0e2', light); ctx.fill();
+      ctx.strokeStyle = LINE; ctx.lineWidth = LW; ctx.stroke();
+      ctx.fillStyle = mix('#1c2a1c', '#4a7a44', light);
+      ctx.beginPath(); ctx.moveTo(6.2, 103); ctx.lineTo(8, 96); ctx.lineTo(9.8, 103); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = mix('#2a4a2a', '#5aa04a', light); // Kräuterbündel als Zeichen
+      ctx.beginPath(); ctx.ellipse(8, 93.6, 1.1, 0.7, 0.5, 0, Math.PI * 2); ctx.fill();
+    }
+    if (has('markt')) { // Marktkarren
+      const x = 52, y = 101;
+      box(ctx, x, y - 5, 13, 3.4, wood, 0.4);
+      ctx.fillStyle = mix('#1e1a16', '#4a3a2a', light);
+      for (const wx of [x + 2.5, x + 10.5]) { ctx.beginPath(); ctx.arc(wx, y - 0.6, 1.7, 0, Math.PI * 2); ctx.fill(); }
+      const goods = ['#d84a3c', '#e6b84a', '#6ab04a', '#d84a3c'];
+      goods.forEach((c, i) => { ctx.fillStyle = mix('#444444', c, 0.3 + light * 0.7); ctx.beginPath(); ctx.arc(x + 2.2 + i * 2.9, y - 5.6, 1.2, 0, Math.PI * 2); ctx.fill(); });
+      ctx.strokeStyle = wood; ctx.lineWidth = 0.6;
+      ctx.beginPath(); ctx.moveTo(x + 0.5, y - 5); ctx.lineTo(x + 0.5, y - 12); ctx.moveTo(x + 12.5, y - 5); ctx.lineTo(x + 12.5, y - 12); ctx.stroke();
+      for (let i = 0; i < 5; i++) { ctx.fillStyle = mix('#555555', i % 2 ? '#f6eedc' : '#3f8a6a', 0.3 + light * 0.7); ctx.fillRect(x - 0.6 + i * 2.84, y - 13.4, 2.84, 2.2); }
+    }
+    if (has('denkmal')) { // Heldendenkmal
+      const x = 110;
+      box(ctx, x - 3.2, 97, 6.4, 5, mix('#34322e', '#b4aca0', light), 0.4);
+      ctx.fillStyle = mix('#3a3a40', '#c8c8d0', light); ctx.strokeStyle = LINE; ctx.lineWidth = 0.35;
+      ctx.beginPath(); ctx.roundRect(x - 1.4, 90.5, 2.8, 6.5, 1); ctx.fill(); ctx.stroke();
+      ctx.beginPath(); ctx.arc(x, 89.2, 1.5, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(x + 1.6, 92); ctx.lineTo(x + 3.6, 85.5); ctx.lineWidth = 0.7; ctx.strokeStyle = mix('#5a5a60', '#e8e8f0', light); ctx.stroke();
+    }
+    if (has('brunnen')) { // Dorfbrunnen
+      const x = 132;
+      box(ctx, x - 5, 96, 10, 5.5, mix('#34322e', '#a8a094', light), 0.45);
+      ctx.fillStyle = mix('#12202e', '#5a9ac8', light); ctx.beginPath(); ctx.ellipse(x, 96, 4.2, 1.1, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = wood; ctx.lineWidth = 0.7;
+      ctx.beginPath(); ctx.moveTo(x - 4.2, 96); ctx.lineTo(x - 4.2, 88.5); ctx.moveTo(x + 4.2, 96); ctx.lineTo(x + 4.2, 88.5); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(x - 6, 89); ctx.lineTo(x, 85.4); ctx.lineTo(x + 6, 89); ctx.closePath();
+      ctx.fillStyle = mix('#461612', '#9c3c2c', light); ctx.fill(); ctx.strokeStyle = LINE; ctx.lineWidth = 0.4; ctx.stroke();
+      ctx.strokeStyle = mix('#444444', '#d8d0c0', light); ctx.lineWidth = 0.3; ctx.beginPath(); ctx.moveTo(x, 89); ctx.lineTo(x, 93.5); ctx.stroke();
+      ctx.fillStyle = wood; ctx.fillRect(x - 0.9, 93.2, 1.8, 1.7);
+    }
+    if (has('buehne')) { // Bardenbühne vor der Taverne
+      box(ctx, 181, 99, 17, 3, wood, 0.4);
+      ctx.strokeStyle = wood; ctx.lineWidth = 0.7;
+      ctx.beginPath(); ctx.moveTo(182, 99); ctx.lineTo(182, 88); ctx.moveTo(197, 99); ctx.lineTo(197, 88); ctx.stroke();
+      ctx.fillStyle = mix('#3a1a3a', '#8a4a9a', light);
+      ctx.beginPath(); ctx.moveTo(181.5, 88); ctx.lineTo(197.5, 88); ctx.lineTo(197.5, 90.5); ctx.quadraticCurveTo(189.5, 93, 181.5, 90.5); ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = LINE; ctx.lineWidth = 0.35; ctx.stroke();
+    }
+  }
+
+  // Wimpelkette quer über den Platz – es wird gefeiert
+  drawBunting(ctx, light, time) {
+    const colors = ['#d84a3c', '#e6b84a', '#3f72d6', '#6ab04a', '#f6eedc'];
+    const yAt = (x) => 52 + Math.sin((x / W) * Math.PI) * 6 + Math.sin(time / 800 + x / 20) * 0.4;
+    ctx.strokeStyle = mix('#1e1a16', '#5a4a3a', light); ctx.lineWidth = 0.3;
+    ctx.beginPath(); ctx.moveTo(0, yAt(0)); for (let x = 4; x <= W; x += 4) ctx.lineTo(x, yAt(x)); ctx.stroke();
+    for (let i = 0; i < 28; i++) {
+      const x = 4 + i * 7;
+      ctx.fillStyle = mix('#444450', colors[i % 5], 0.35 + light * 0.65);
+      ctx.beginPath(); ctx.moveTo(x - 1.6, yAt(x - 1.6)); ctx.lineTo(x + 1.6, yAt(x + 1.6)); ctx.lineTo(x, yAt(x) + 3.4); ctx.closePath(); ctx.fill();
+    }
+  }
+
+  // Musik: Noten steigen auf (von der Bühne oder aus der Taverne)
+  drawNotes(ctx, time, lively) {
+    ctx.save();
+    ctx.fillStyle = 'rgba(255,250,230,0.9)'; ctx.textAlign = 'center';
+    const n = lively ? 4 : 2;
+    for (let i = 0; i < n; i++) {
+      const ph = ((time / 3200) + i / n) % 1;
+      ctx.globalAlpha = Math.sin(ph * Math.PI) * 0.9;
+      ctx.font = `${3 + (i % 2)}px sans-serif`;
+      ctx.fillText(i % 2 ? '♪' : '♫', 172 + i * 6 + Math.sin(ph * 6 + i) * 2, 62 - ph * 16);
+    }
+    ctx.restore();
+  }
+
+  drawRain(ctx, time) {
+    ctx.fillStyle = 'rgba(70,84,110,0.22)';
+    ctx.fillRect(0, 0, W, H);
+    ctx.strokeStyle = 'rgba(210,225,245,0.5)'; ctx.lineWidth = 0.3;
+    ctx.beginPath();
+    for (let i = 0; i < 90; i++) {
+      const x = (i * 53.7 + time * 0.02) % (W + 20) - 10;
+      const y = (i * 37.3 + time * 0.11 * (1 + (i % 3) * 0.15)) % (H + 10) - 5;
+      ctx.moveTo(x, y); ctx.lineTo(x - 1.2, y + 4.2);
+    }
+    ctx.stroke();
+  }
+
   // ---------- Gebäude ----------
 
   drawSmithy(ctx, s, light) {
@@ -397,8 +512,8 @@ export class VillageScene {
       c.fillStyle = '#e6b84a'; c.beginPath(); c.arc(0, 0.4, 1.6, 0, Math.PI * 2); c.fill();
       c.strokeStyle = '#a07a2a'; c.lineWidth = 0.3; c.stroke();
     });
-    // Kisten (Lagerhaus)
-    for (let i = 0; i < s.buildings.lager; i++) {
+    // Kisten neben dem Laden (wachsen mit dem Ausbau)
+    for (let i = 0; i < lvl; i++) {
       const bx = x0 + w + 0.5 + (i % 2) * 0.8, by = 74 - i * 5.4;
       box(ctx, bx, by, 6, 5.4, mix('#4a3418', '#a87a40', light), 0.4);
       ctx.strokeStyle = mix('#3a2410', '#7a5428', light); ctx.lineWidth = 0.4;

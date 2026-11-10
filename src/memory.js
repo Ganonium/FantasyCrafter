@@ -17,12 +17,12 @@ export const MEMORIES = {
     thought: (m) => `Seit der Sache ${area(m).in} geh ich da nicht mehr ohne Heiltrank hin.`,
   },
   saved: {
-    icon: '🧪', trust: 8, you: true,
+    icon: '🧪', trust: 5, you: true,
     line: (m) => `Dein Heiltrank rettete ${m.f ? 'ihr' : 'ihm'} ${area(m).in} das Leben.`,
     thought: (m) => `Ohne deinen Heiltrank wäre ich ${area(m).in} geblieben.`,
   },
   firstWin: {
-    icon: '🏆', trust: 4, you: true,
+    icon: '🏆', trust: 3, you: true,
     line: (m) => `Erster Sieg ${area(m).in} – mit ${m.item} aus deinem Laden.`,
     thought: (m) => `${m.item} hat mir ${area(m).in} gute Dienste geleistet.`,
   },
@@ -32,7 +32,7 @@ export const MEMORIES = {
     thought: (m) => `Schade um ${m.item}. So eins find ich nicht wieder.`,
   },
   goodAdvice: {
-    icon: '✋', trust: 15, you: true,
+    icon: '✋', trust: 12, you: true,
     line: (m) => `Dein Zuspruch führte zum Sieg ${area(m).in}.`,
     thought: () => 'Auf deinen Rat kann man sich verlassen.',
   },
@@ -42,32 +42,32 @@ export const MEMORIES = {
     thought: () => 'Auf deinen Rat hör ich so schnell nicht wieder.',
   },
   loan: {
-    icon: '💰', trust: 10, you: true,
+    icon: '💰', trust: 8, you: true,
     line: (m) => `Du hast ${m.f ? 'ihr' : 'ihm'} Gold vorgestreckt, als es knapp war.`,
     thought: () => 'Du hast mir vertraut, als ich blank war. Das vergess ich nicht.',
   },
   loanRefused: {
-    icon: '💰', trust: -6, you: true,
+    icon: '💰', trust: -10, you: true,
     line: () => 'Du hast einen Vorschuss verweigert.',
     thought: () => 'Geschäft ist Geschäft, hast du gesagt. Na dann.',
   },
   gift: {
-    icon: '🎁', trust: 25, you: true,
+    icon: '🎁', trust: 18, you: true,
     line: (m) => `Du hast ${m.f ? 'ihr' : 'ihm'} ${m.item} geschenkt.`,
     thought: (m) => `${m.item}, einfach so geschenkt … Dir bin ich was schuldig.`,
   },
   favored: {
-    icon: '🤝', trust: 10, you: true,
+    icon: '🤝', trust: 8, you: true,
     line: (m) => `Du hast ${m.f ? 'ihr' : 'ihm'} ${m.item} gegeben – und nicht ${m.other}.`,
     thought: (m) => `Du hast ${m.item} mir gegeben. ${m.other} guckt immer noch sauer.`,
   },
   passedOver: {
-    icon: '😒', trust: -12, you: true,
+    icon: '😒', trust: -16, you: true,
     line: (m) => `Du hast ${m.item} lieber ${m.other} gegeben.`,
     thought: (m) => `${m.item} hätte mir zugestanden, nicht ${m.other}.`,
   },
   apology: {
-    icon: '🍺', trust: 24, you: true,
+    icon: '🍺', trust: 20, you: true,
     line: () => 'Du hast dich für deinen schlechten Rat entschuldigt.',
     thought: () => 'Jeder irrt sich mal. Du hast es wenigstens zugegeben.',
   },
@@ -77,12 +77,12 @@ export const MEMORIES = {
     thought: () => '„Deine Entscheidung“, hast du gesagt. Schöner Freund.',
   },
   listened: {
-    icon: '👂', trust: 6, you: true,
+    icon: '👂', trust: 4, you: true,
     line: (m) => `Du hast dir die Geschichte ${area(m).aus} angehört.`,
     thought: () => 'Bei dir kann man wenigstens mal erzählen.',
   },
   cautioned: {
-    icon: '👂', trust: 3, you: true,
+    icon: '👂', trust: 2, you: true,
     line: () => 'Du hast zur Vorsicht gemahnt.',
     thought: () => 'Vielleicht hast du recht. Ich pass besser auf.',
   },
@@ -92,7 +92,7 @@ export const MEMORIES = {
     thought: () => 'Du hast ja nie Zeit.',
   },
   thanked: {
-    icon: '💛', trust: 5, you: true,
+    icon: '💛', trust: 3, you: true,
     line: () => 'Kam vorbei, um sich bei dir zu bedanken.',
     thought: () => 'Im Goldenen Amboss ist man gut aufgehoben.',
   },
@@ -106,6 +106,14 @@ export function changeTrust(h, d) {
   h.trust = Math.max(-100, Math.min(100, trustOf(h) + d));
 }
 
+// Ohne neue Erlebnisse verblasst das Verhältnis: einmal am Tag einen Schritt Richtung „man kennt sich“.
+// Guter Wille schwindet schneller als Groll.
+export function fadeTrust(h) {
+  const t = trustOf(h);
+  if (t > 10) h.trust = t - (t > 60 ? 3 : 2);
+  else if (t < -10) h.trust = t + 1;
+}
+
 // Eine Erinnerung anlegen. Gleichartige alte Erinnerungen (gleiches Gebiet/Teil) werden ersetzt.
 export function remember(s, h, type, data = {}) {
   const def = MEMORIES[type];
@@ -115,7 +123,10 @@ export function remember(s, h, type, data = {}) {
   h.mem = h.mem.filter((x) => !(x.type === type && x.area === m.area && x.item === m.item));
   h.mem.push(m);
   if (h.mem.length > LIMIT) h.mem.splice(0, h.mem.length - LIMIT);
-  if (def.trust) changeTrust(h, def.trust);
+  // Wiederholungen wirken schwächer: Der dritte gerettete Tag ist kein Wunder mehr
+  const again = (h.memCount ??= {})[type] ?? 0;
+  h.memCount[type] = again + 1;
+  if (def.trust) changeTrust(h, def.trust > 0 ? Math.max(1, Math.round(def.trust / (1 + again * 0.5))) : def.trust);
   return m;
 }
 

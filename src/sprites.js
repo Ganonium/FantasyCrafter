@@ -96,13 +96,15 @@ function glow(ctx, x, y, r, rgb, time, speed = 400) {
  * night: in der Nacht schlafen Erholende, alle anderen sind müde.
  */
 export function heroLook(hero, night = false) {
-  const injured = hero.state === 'injured';
+  // Schwer verletzt (ohne Heiltrank): Schlinge, Verbände, blass. Leicht verletzt (Heiltrank half): nur Kopfverband und Schrammen.
+  const hurt = hero.state === 'injured';
+  const injured = hurt && hero.wound !== 'light';
   const resting = hero.state === 'rest';
   return {
     injured,
-    pose: injured || resting ? 'sit' : 'stand',
-    eyes: resting && night ? 'closed' : resting || injured || night ? 'tired' : 'open',
-    dirty: resting || injured,
+    pose: hurt || resting ? 'sit' : 'stand',
+    eyes: resting && night ? 'closed' : resting || hurt || night ? 'tired' : 'open',
+    dirty: resting || hurt,
     mug: resting && !night,
     mood: hero.mood ?? 60,
   };
@@ -110,7 +112,8 @@ export function heroLook(hero, night = false) {
 
 /**
  * Zeichnet einen Helden. x/y = Fußpunkt im Kontext, size = Körperhöhe in Kontext-Einheiten.
- * opts: { flip, time (ms), size, injured, pose ('stand'|'sit'), eyes ('open'|'tired'|'closed'), dirty, mug, mood }
+ * opts: { flip, time (ms), size, injured, pose ('stand'|'sit'), eyes ('open'|'tired'|'closed'), dirty, mug, mood,
+ *         still (Standbild ohne Blinzeln, für Porträts) }
  */
 export function drawHero(ctx, hero, x, y, opts = {}) {
   const { flip = false, time = 0, size = 24, injured = false, pose = 'stand', dirty = false, mug = false } = opts;
@@ -134,7 +137,7 @@ export function drawHero(ctx, hero, x, y, opts = {}) {
   const seed = hero.id * 7919;
   // Blinzeln und Atmen, damit die Figuren nicht wie Pappaufsteller wirken
   let eyes = opts.eyes ?? 'open';
-  if (eyes !== 'closed' && (time + seed) % 4300 < 140) eyes = 'closed';
+  if (!opts.still && eyes !== 'closed' && (time + seed) % 4300 < 140) eyes = 'closed';
   const breath = Math.sin(time / (sit ? 900 : 700) + seed) * (eyes === 'closed' && sit ? 1.6 : 0.8);
 
   // Schatten
@@ -702,5 +705,5 @@ export function renderPortrait(canvas, hero, time = 0) {
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   const size = canvas.height * 0.66;
-  drawHero(ctx, hero, canvas.width * 0.4, canvas.height * 0.94, { ...heroLook(hero), time, size });
+  drawHero(ctx, hero, canvas.width * 0.4, canvas.height * 0.94, { ...heroLook(hero), time, size, still: true });
 }
