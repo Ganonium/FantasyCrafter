@@ -5,7 +5,7 @@ import {
 } from './data.js';
 import {
   clockOf, building, heroPower, successChance, evaluateAreas, priceOf, xpNeeded, canCraft, queueCraft,
-  cancelQueued, sellFromShelf, postBounty, cancelBounty, upgradeCost, canUpgrade, upgrade,
+  cancelQueued, sellFromShelf, sellAllFromShelf, postBounty, cancelBounty, upgradeCost, canUpgrade, upgrade,
   logClock, activeEffects, resolveEvent, eventCost, canPay, acceptOrder, declineOrder, fillOrderFromShelf, currentGoal,
   buildProject, prioritizeQueued, canAfford, craftCost, missingRare, powerWith, gearPower, arrivalChance, craftTime, matPrice, areaDanger, afterAction,
 } from './sim.js';
@@ -60,8 +60,8 @@ export function fmtDuration(min) {
 // Grundstoffe werden beim Herstellen automatisch gekauft – rot markiert sind nur fehlende seltene Materialien
 function matList(s, mats) {
   return Object.entries(mats).map(([m, n]) => {
-    const ok = MATERIALS[m].basic || s.mats[m] >= n;
-    return `<span class="mat ${ok ? '' : 'missing'}" title="${MATERIALS[m].name}">${MATERIALS[m].icon}${n}</span>`;
+    if (MATERIALS[m].basic) return `<span class="mat" title="${MATERIALS[m].name}">${MATERIALS[m].icon}${n}</span>`;
+    return `<span class="mat rare ${s.mats[m] >= n ? 'have' : 'missing'}" title="${MATERIALS[m].name}">${MATERIALS[m].icon} ${s.mats[m]}/${n}</span>`;
   }).join(' ');
 }
 
@@ -235,15 +235,32 @@ export class UI {
         ${locked ? '' : this.interestHtml(s, id) + this.stockHtml(s, id)}</div>`;
     }).join('');
 
-    const mats = Object.entries(MATERIALS).map(([id, m]) => `<div class="matrow">
-      <span>${m.icon} ${m.name}</span><b>${s.mats[id]}</b>
-      ${m.basic ? `<span class="small ${matPrice(s, id) > m.price ? 'bad' : matPrice(s, id) < m.price ? 'ok' : 'dim'}">Händler: ${matPrice(s, id)} 🪙/Stück</span>`
-        : `<span class="dim small">nur über Kopfgeld</span>`}</div>`).join('');
-
     return `<section><h2>Werkplätze</h2>${slots}<h3>Warteschlange</h3>${queue}</section>
-      <section><h2>Rezepte</h2>${tabs}${list}</section>
-      <section><h2>Lager</h2><p class="small dim">Fehlende Grundstoffe kauft die Werkstatt beim Herstellen automatisch
-      beim Händler. Vorräte (z. B. von der Karawane) werden zuerst verbraucht.</p>${mats}</section>`;
+      <section><h2>Rezepte</h2>${this.stockBar(s)}${tabs}${list}</section>`;
+  }
+
+  // Lager auf einen Blick: seltene Materialien groß (antippen = Kopfgeld vorbereiten), Grundstoffe klein
+  stockBar(s) {
+    const rare = RARE.map((m) => {
+      const open = s.bounties.filter((b) => b.mat === m).reduce((n, b) => n + b.qty - b.delivered, 0);
+      return `<button class="stock ${s.mats[m] ? '' : 'none'}" data-act="tobounty" data-id="${m}" title="${MATERIALS[m].name}">
+        <span class="ico">${MATERIALS[m].icon}</span><b>${s.mats[m]}</b><small>${MATERIALS[m].name}</small>
+        ${open ? `<em>📋 +${open}</em>` : ''}</button>`;
+    }).join('');
+    const basic = Object.entries(MATERIALS).filter(([, m]) => m.basic).map(([id, m]) => {
+      const price = matPrice(s, id);
+      return `<span title="${m.name}">${m.icon} ${s.mats[id]} <span class="${price > m.price ? 'bad' : price < m.price ? 'ok' : 'dim'}">(${price} 🪙)</span></span>`;
+    }).join('');
+    return `<div class="stockbar">${rare}</div>
+      <div class="small dim basics">Grundstoffe: ${basic}<br>Fehlendes kauft die Werkstatt automatisch zum Preis in Klammern. 📋 = per Kopfgeld bestellt.</div>`;
+  }
+
+  // Ware, die im Moment niemand gebrauchen kann (kein Held, keine Bestellung)
+  isShelfWarmer(s, id) {
+    const r = RECIPES[id];
+    if (r.slot !== 'weapon' && r.slot !== 'armor') return false;
+    if (s.orders.some((o) => o.lines.some((l) => l.recipe === id && l.filled < l.qty))) return false;
+    return !s.heroes.some((h) => h.cls === r.cls && (h[r.slot] ? RECIPES[h[r.slot]].tier : 0) < r.tier);
   }
 
   tab_laden(s) {
@@ -252,7 +269,15 @@ export class UI {
     for (const it of s.shelf) groups[it.recipe] = (groups[it.recipe] ?? 0) + 1;
     const ids = new Set([...Object.keys(groups), ...s.queue, ...s.slots.filter(Boolean).map((j) => j.recipe)]
       .filter((id) => RECIPES[id].slot !== 'event'));
-    const rows = [...ids].map((id) => {
+    const half = (id) => Math.floor(fairPrice(id) * 0.5);
+    const warmers = Object.keys(groups).filter((id) => this.isShelfWarmer(s, id));
+    const warmCount = warmers.reduce((n, id) => n + groups[id], 0);
+    const warmGold = warmers.reduce((n, id) => n + groups[id] * half(id), 0);
+    const clear = warmCount
+      ? `<div class="card warm"><div class="row"><span><b>🕸️ ${warmCount} ${warmCount === 1 ? 'Ladenhüter' : 'Ladenhüter'}</b><br>
+          <span class="small dim">Ware, die gerade kein Held und keine Bestellung braucht.</span></span>
+          <button data-act="sellwarm">Alle verkaufen · ${warmGold} 🪙</button></div></div>` : '';
+    const rows = [...ids].sort((a, b) => this.isShelfWarmer(s, a) - this.isShelfWarmer(s, b)).map((id) => {
       const r = RECIPES[id];
       const n = groups[id] ?? 0;
       const fair = fairPrice(id);
@@ -261,12 +286,14 @@ export class UI {
         <span class="small ok">${r.slot === 'potion' ? 'Notfall-Trank' : `+${gearPower(id)} Kraft`}</span>
         <span>${n ? `${n}× im Regal` : '<span class="dim">in Arbeit</span>'}</span></div>
         <div class="small">Preis: <b class="gold-txt">${fair} 🪙</b></div>${interest}
-        ${n ? `<button class="link" data-act="sell" data-id="${id}">1 Stück an Händler verkaufen (${Math.floor(fair * 0.5)} 🪙)</button>` : ''}</div>`;
+        ${n ? `<div class="row sellrow"><span class="small dim">An Händler (halber Preis):</span><span>
+          <button class="chip" data-act="sell" data-id="${id}">1 · ${half(id)} 🪙</button>
+          ${n > 1 ? `<button class="chip" data-act="sellall" data-id="${id}">Alle ${n} · ${n * half(id)} 🪙</button>` : ''}</span></div>` : ''}</div>`;
     }).join('');
     return `<section><h2>Regal <span class="dim small">${s.shelf.length}/${cap}</span></h2>
       <p class="small dim">Helden kaufen selbst, sobald sie das nötige Gold haben. Geizige wollen danach noch einen
       Notgroschen übrig haben. 🌟 = genau das wünscht sich jemand.</p>
-      ${rows || '<p class="dim">Das Regal ist leer. Ab in die Werkstatt!</p>'}</section>
+      ${clear}${rows || '<p class="dim">Das Regal ist leer. Ab in die Werkstatt!</p>'}</section>
       <section><h2>Einnahmen</h2><div class="small">Verkauft: ${s.stats.sold} Waren · gesamt ${s.stats.earned} 🪙</div></section>`;
   }
 
@@ -370,6 +397,8 @@ export class UI {
       <canvas class="mini" width="54" height="81" data-portrait="${h.id}"></canvas>
       <div class="hinfo"><div class="row"><b>${esc(h.name)}</b><span>${moodIcon(h.mood)} ${Math.floor(h.gold)} 🪙</span></div>
         <div class="small">${className(h.cls, h.female)} · Stufe ${h.level} · Kraft ${heroPower(h)}</div>
+        <div class="traits">${h.traits.map((t) => `<span class="trait${TRAITS[t].acquired || (h.grown ?? []).includes(t) ? ' grown' : ''}">${TRAITS[t].name}</span>`).join('')}
+          <span class="trait place" title="Lieblingsgebiet">❤️ ${AREAS[h.fav].icon}</span>${h.hated ? `<span class="trait place" title="Verhasstes Gebiet">🚫 ${AREAS[h.hated].icon}</span>` : ''}</div>
         <div class="small dim">${heroState(s, h)}</div>
         ${this.goalLine(s, h)}${this.relationLine(s, h)}${this.statusLines(s, h)}
         <div class="thought">„${esc(h.thought)}“</div></div></div>`).join('');
@@ -889,6 +918,24 @@ export class UI {
         if (idx >= 0) sellFromShelf(s, idx);
         break;
       }
+      case 'sellall': {
+        const n = s.shelf.filter((x) => x.recipe === id).length;
+        if (!confirm(`${n}× ${RECIPES[id].name} für zusammen ${n * Math.floor(fairPrice(id) * 0.5)} Gold an den Händler verkaufen?`)) return;
+        this.toast(`+${sellAllFromShelf(s, (x) => x === id)} 🪙`);
+        break;
+      }
+      case 'sellwarm': {
+        const pred = (x) => this.isShelfWarmer(s, x);
+        const list = s.shelf.filter((it) => pred(it.recipe));
+        const gold = list.reduce((g, it) => g + Math.floor(fairPrice(it.recipe) * 0.5), 0);
+        if (!confirm(`${list.length} Ladenhüter für zusammen ${gold} Gold an den Händler verkaufen?`)) return;
+        this.toast(`+${sellAllFromShelf(s, pred)} 🪙`);
+        break;
+      }
+      case 'tobounty':
+        this.bounty.mat = id; this.bounty.reward = Math.round(MATERIALS[id].value * 1.2);
+        this.tab = 'auftraege'; this.buildNav(); this.$('#panel').scrollTop = 0;
+        break;
       case 'bmat': this.bounty.mat = id; this.bounty.reward = Math.round(MATERIALS[id].value * 1.2); break;
       case 'bstep': {
         const k = el.dataset.k;

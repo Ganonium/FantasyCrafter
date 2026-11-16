@@ -960,6 +960,18 @@ export function sellFromShelf(s, index) {
   s.shelf.splice(index, 1);
 }
 
+// Alle Regalplätze, deren Rezept passt, auf einmal an den Händler verkaufen; liefert den Erlös
+export function sellAllFromShelf(s, pred) {
+  let gold = 0;
+  s.shelf = s.shelf.filter((it) => {
+    if (!pred(it.recipe)) return true;
+    gold += Math.floor(fairPrice(it.recipe) * 0.5);
+    return false;
+  });
+  s.gold += gold;
+  return gold;
+}
+
 // ---------- Kopfgelder ----------
 
 export function postBounty(s, mat, reward, qty) {

@@ -266,3 +266,27 @@ textarea { width: 100%; margin-top: 8px; background: #15110d; color: var(--text)
 .entry.k-threat .txt { color: #f6b49a; font-weight: bold; }
 .card.deed { border-color: var(--gold); }
 .stats.two { grid-template-columns: repeat(2, 1fr); }
+
+/* Lager auf einen Blick (Werkstatt) */
+.stockbar { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; margin: 6px 0 4px; position: sticky; top: -4px; z-index: 2; background: var(--panel); padding: 4px 0; }
+.stock { display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 5px 2px; background: var(--card); border: 1px solid var(--line); border-radius: 8px; position: relative; min-width: 0; }
+.stock .ico { font-size: 18px; line-height: 1.1; }
+.stock b { font-size: 16px; color: var(--gold); }
+.stock.none b { color: var(--dim); }
+.stock.none .ico { opacity: 0.55; }
+.stock small { font-size: 9px; color: var(--dim); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.stock em { font-style: normal; font-size: 10px; color: var(--ok); }
+.basics { margin-bottom: 8px; }
+.basics > span { margin-right: 8px; white-space: nowrap; }
+.mat.rare { padding: 1px 6px; border-radius: 10px; border: 1px solid var(--line); }
+.mat.rare.have { color: var(--ok); border-color: #55733f; }
+.mat.rare.missing { border-color: #8a4238; }
+/* Laden: Verkaufen */
+.sellrow { margin-top: 6px; }
+.sellrow .chip { padding: 6px 10px; font-size: 13px; margin-left: 4px; }
+.card.warm { border-color: var(--accent); }
+/* Heldenkarte: Wesen */
+.traits { display: flex; flex-wrap: wrap; gap: 4px; margin: 3px 0; }
+.trait { font-size: 11px; padding: 1px 7px; border-radius: 10px; background: #3a2f22; border: 1px solid var(--line); }
+.trait.grown { border-color: #55733f; color: var(--ok); }
+.trait.place { background: none; }
