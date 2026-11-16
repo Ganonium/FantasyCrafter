@@ -49,7 +49,7 @@ header .title { font-size: 14px; white-space: nowrap; overflow: hidden; text-ove
 #scene {
   display: block;
   width: 100%;
-  aspect-ratio: 200 / 112;
+  aspect-ratio: 200 / 124;
   border-bottom: 2px solid var(--line);
   cursor: pointer;
 }
@@ -248,3 +248,21 @@ textarea { width: 100%; margin-top: 8px; background: #15110d; color: var(--text)
 .bio-entry.mark span:last-child::after { content: ' ✋'; font-size: 11px; }
 .event-btn.update { background: linear-gradient(90deg, #24442e, #1c3424); border-color: #8fc46a; animation: none; }
 .event-btn.update b { color: #d4f2c0; }
+
+/* Verhältnis zu dir und Erinnerungen */
+.bar.trust { height: 5px; }
+.bar.trust > div { background: linear-gradient(90deg, #a8504a, #c9a24a 50%, #6fae5e); }
+.mem { padding: 2px 0 2px 8px; border-left: 2px solid var(--line); margin: 3px 0; color: #d6c8ae; }
+.mem.you { border-left-color: var(--accent); }
+
+/* Dorfchronik */
+.legacy-row { padding: 7px 0; border-bottom: 1px solid var(--line); cursor: pointer; }
+.entry.k-farewell .txt { color: var(--gold); }
+
+/* Geschichten und die große Bedrohung */
+.event-btn.threat { background: linear-gradient(90deg, #5a1a14, #3a1410); border-color: #e0603c; }
+.bar.threat > div { background: linear-gradient(90deg, #a8504a, #c9a24a 55%, #6fae5e); }
+.entry.k-saga .txt { color: #f2deb0; }
+.entry.k-threat .txt { color: #f6b49a; font-weight: bold; }
+.card.deed { border-color: var(--gold); }
+.stats.two { grid-template-columns: repeat(2, 1fr); }

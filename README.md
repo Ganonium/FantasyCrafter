@@ -6,7 +6,8 @@ den Drachen wagen. Details stehen in [KONZEPT.md](KONZEPT.md).
 
 ## Spielen
 
-- Online über GitHub Pages (Repository → Settings → Pages → „Deploy from a branch“, `main`, Ordner `/ (root)`).
+- Online über GitHub Pages: <https://ganonium.github.io/FantasyCrafter/>. Jeder Push auf `main` veröffentlicht
+  automatisch (Repository → Settings → Pages → „Deploy from a branch“, `main`, Ordner `/ (root)`).
 - Lokal: einen beliebigen statischen Server im Ordner starten, z. B. `python3 -m http.server`, dann
   <http://localhost:8000> öffnen. Über `file://` funktioniert es wegen der ES-Module nicht.
 - Testtempo: `?speed=60` an die URL hängen oder in den Einstellungen (⚙️) umstellen.

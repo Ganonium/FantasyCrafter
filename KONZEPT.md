@@ -11,7 +11,7 @@ Du beeinflusst sie nur indirekt:
 
 - **Was du herstellst und in welcher Reihenfolge** (bessere Ausrüstung → mehr Mut → gefährlichere Gebiete)
 - **Welche Kopfgelder du am Auftragsbrett aushängst** (Belohnung pro Stück für seltene Materialien)
-- **Wie du das Dorf ausbaust** (Schmiede, Laden, Taverne, Lagerhaus)
+- **Wie du das Dorf ausbaust** (Schmiede, Laden, Taverne)
 
 ```
 Ausrüstung ─► Helden trauen sich mehr zu ─► seltene Materialien + Gold ─► bessere Ausrüstung …
@@ -29,7 +29,7 @@ Drachen traut, gibt es keine Drachenschuppen. Genauso fehlt die Spinnenseide, we
 - Abenteuer dauern 30 Min. bis 4 Std., Herstellen 10 Min. bis 3 Std. (bei Tempo 1×). Nachts (22–6 Uhr) bricht niemand auf.
 - **Testtempo:** 1×, 10×, 60×, 300× in den Einstellungen oder per URL `?speed=60`. `DEFAULT_SPEED` in `src/main.js` ist 1.
 - **Offline-Fortschritt:** Das Spiel speichert, bis wann es gerechnet hat. Beim Öffnen wird die verpasste Zeit
-  nachsimuliert (begrenzt durch das Lagerhaus: 10/16/24 Std.).
+  nachsimuliert, höchstens 24 Stunden.
 
 ## Helden mit Eigenleben
 
@@ -39,11 +39,11 @@ Drachen traut, gibt es keine Drachenschuppen. Genauso fehlt die Spinnenseide, we
 | **Stufe + Ausrüstung → Kraft** | bestimmt die Erfolgschance pro Gebiet |
 | **Zwei Wesenszüge** | Mutig, Vorsichtig, Gierig, Faul, Eifrig, Ruhmsüchtig, Geizig, Spendabel, Gesellig |
 | **Lieblingsgebiet / verhasstes Gebiet** | „Spinnenhöhle? Nicht für alles Gold der Welt. Ich hasse Spinnen.“ |
-| **Laune** | steigt bei Erfolgen, Käufen, erfüllten Wünschen und mit Freunden in der Taverne, sinkt bei Verletzungen und Streit; wer lange schlecht gelaunt ist, verlässt das Dorf |
-| **Wunsch** | ein persönliches Ziel: ein bestimmtes Ausrüstungsteil, ein Gebiet bezwingen, eine Stufe, Gold ansparen oder ein Kopfgeld kassieren |
+| **Laune** | steigt bei Erfolgen, Käufen, erfüllten Wünschen und mit Freunden in der Taverne, sinkt bei Verletzungen und Streit; wer lange schlecht gelaunt ist, verlässt das Dorf im Groll |
+| **Wunsch** | ein persönliches Ziel: ein bestimmtes Ausrüstungsteil, ein Gebiet bezwingen oder ein Kopfgeld kassieren |
 | **Beziehungen** | Freunde (💛) und Rivalen (⚔️) entstehen im Tavernengeplauder und auf gemeinsamen Ausflügen |
 | **Tagesform** | jeden Tag neu ausgewürfelt; manche Tage hat einfach niemand Lust |
-| **Gold** | eigenes Geld; davon kaufen die Helden bei dir, bezahlen Reparaturen und die Taverne |
+| **Gold** | eigenes Geld; davon kaufen die Helden bei dir und bezahlen die Taverne |
 
 **Entscheidung** (alle 15–40 Spielminuten, wenn ausgeruht und nicht nachts):
 
@@ -59,8 +59,8 @@ Drachen traut, gibt es keine Drachenschuppen. Genauso fehlt die Spinnenseide, we
 - **Seltene Materialien** (Wolfsfell, Spinnenseide, Mondkristall, Trollknochen, Drachenschuppe) gibt es nur über
   Kopfgelder. Das Gold wird beim Aushängen hinterlegt und bei Lieferung an den Helden ausgezahlt.
 - **Ausrüstung** in 4 Stufen je Klasse und Slot (Waffe, Rüstung); die Stufen schaltet der Schmiede-Ausbau frei.
-- **Heiltränke** sind Verbrauchsgut: Sie retten bei einer Niederlage vor Verletzungen und machen Helden mutiger.
-- **Reparaturen**: Nach jedem Abenteuer lassen Helden ihre Ausrüstung bei dir reparieren, was laufende Einnahmen bringt.
+- **Heiltränke** sind Verbrauchsgut: Bei einer Niederlage machen sie aus einer schweren Verletzung eine leichte
+  (kurze Erholung, kein Goldverlust, keine zerbrochene Ausrüstung, keine Narbe) und machen Helden mutiger.
 - **Feste Preise**: Der Laden verkauft immer zum fairen Preis. Dein Einfluss liegt darin, *was* du wann herstellst.
 - **Ladenhüter** kann man für 50 % an den Händler verkaufen.
 
@@ -79,14 +79,16 @@ Drachen traut, gibt es keine Drachenschuppen. Genauso fehlt die Spinnenseide, we
 ## Persönliche Wünsche
 
 Jeder Held hat (mit Pausen dazwischen) einen Wunsch, passend zu seinem Wesen: der Ruhmsüchtige will die Trollbrücke
-bezwingen, der Geizige Gold ansparen, der Vorsichtige wünscht sich eine bestimmte Rüstung. Der Wunsch lenkt seine
+bezwingen, der Vorsichtige wünscht sich eine bestimmte Rüstung. Der Wunsch lenkt seine
 Entscheidungen (z. B. lockt das Wunsch-Gebiet). Erfüllt er sich, ist der Held überglücklich (🌟 in der Chronik).
 In Werkstatt und Laden steht 🌟 an Helden, die sich genau dieses Teil wünschen – so kannst du gezielt Träume erfüllen.
 
-## Persönliche Bitten
+## Besucher am Tresen
 
-Etwa alle 4–8 Stunden kommt tagsüber ein Held mit einer Bitte an deinen Tresen (🙋 im Banner). Er wartet 5 Stunden,
-danach gilt die letzte Antwort. Deine Antwort hat Folgen, oft erst später sichtbar:
+Tagsüber kommt etwa alle 1,5–3 Stunden ein Held zu dir an den Tresen (🙋 im Banner, ❗-Blase über dem Helden in der
+Dorfszene – Antippen öffnet das Gespräch). Besucher kommen von 6 bis 22 Uhr. Bis zu drei warten gleichzeitig, jeder 12 Stunden; danach gilt die
+letzte Antwort. So gibt es bei jedem kurzen Blick ins Spiel ein, zwei kleine Entscheidungen. Nach der Antwort siehst du
+sofort, was passiert ist. Deine Antwort hat Folgen, oft erst später sichtbar:
 
 | Bitte | Antworten und Folgen |
 |---|---|
@@ -94,6 +96,82 @@ danach gilt die letzte Antwort. Deine Antwort hat Folgen, oft erst später sicht
 | 💰 Vorschuss für ein Teil aus deinem Regal | **Vorstrecken**: Er kauft sofort und zahlt zurück, sobald er kann – oder bleibt es schuldig. **Ablehnen**: Enttäuschung. |
 | 💢 Streit zweier Rivalen im Laden | **Schlichten** (eine Runde ausgeben): Sie kommen sich näher. **Anheizen**: 12 Std. Wettstreit, beide gehen mehr Risiko ein. **Raushalten**. |
 | 🎓 Eine Lehre vermitteln (Junger Held ↔ Veteran) | **Vermitteln** (Lehrgeld): Der Lehrling lernt 60 % schneller und übernimmt beim Auslernen vielleicht einen Wesenszug des Lehrmeisters. |
+| 📣 Frisch vom Abenteuer (erster Sieg oder knapper Ausgang) | **„Erzähl mehr!“**: bestärkt, wagt 8 Std. mehr. **Zur Vorsicht mahnen**: kauft einen Heiltrank. |
+| 💛 Ein Dankeschön (dein Heiltrank, dein Rat, deine Ware) | **Annehmen** oder **eine Runde aufs Haus** (gute Laune im ganzen Dorf). |
+| ⚖️ Das letzte Stück (will ein Held das letzte Exemplar kaufen und ein zweiter hätte es auch gern, wartet der Kauf auf dich) | **Einem geben**: Der eine dankt es dir, der andere merkt es sich. **Münze werfen**: gerecht. |
+| 😠 Ein Wörtchen mit dir (dein Rat ging schief, du hast jemanden übergangen oder abblitzen lassen) | **Entschuldigen und Heiler bezahlen**, **„Deine Entscheidung“** (Abgehärtete respektieren das) oder **Schweigen**. |
+| 🎁 Sehnsüchtige Blicke (Ausrüstung zerbrochen, kein Gold für Ersatz) | **Schenken**, **halber Preis** oder **nichts sagen**. |
+| 🧪 Nicht ohne Heiltrank (will zurück an den Ort der Niederlage, ist aber blank) | **Schenken**, **anschreiben** oder **ablehnen**. |
+
+## Erinnerungen und Verhältnis zu dir
+
+Helden merken sich, was sie erlebt haben und wie du mit ihnen umgegangen bist (`src/memory.js`). Die Heldenkarte zeigt
+unter „Verhältnis zu dir“, woran sie sich erinnern. Erinnerungen tauchen als Gedanken wieder auf und lösen Besuche aus.
+
+- **Narbe**: Wer in einem Gebiet schwer verletzt wurde, geht dort eine Woche lang nur mit Heiltrank hin (kauft ihn
+  vor dem Aufbruch bei dir) und ist drei Tage zögerlicher.
+- **Vertrauen** (−100 … 100) verblasst ohne neue Erlebnisse täglich ein wenig, und Wiederholungen wirken schwächer. Es wächst durch gute Ware, gerettete Leben, guten Rat, Geschenke und Zuhören; es sinkt durch
+  schlechten Rat, Abfuhren und Bevorzugung anderer.
+- **Wer dir vertraut** (ab 50), bringt dir selten seltene Materialien mit. **Wer dir etwas nachträgt** (ab −30),
+  kauft nur widerwillig bei dir und fragt dich nicht mehr um Rat.
+
+## Kommen und Gehen
+
+Helden bleiben nicht ewig (`src/farewell.js`). Wer genug erlebt hat, kommt mit dem Abschied an deinen Tresen (🎒):
+
+- **Angekommen** (zufrieden, mindestens Stufe 8, mindestens 10 Tage im Dorf) oder **rastlos** (mindestens Stufe 10,
+  14 Tage, voll ausgerüstet oder mehrfacher Drachensieger). Höchstens ein Abschied alle 40 Stunden, nie bei weniger
+  als vier Helden.
+- **„Bleib bei uns.“**: Der Held baut ein Häuschen (300 + 80 je Stufe Gold aus eigener Tasche; fehlt etwas, kannst du es
+  dazulegen) und wird **Dorfbewohner**. Wen die Ferne ruft (ruhmsüchtig, eifrig), den hält nur echtes Vertrauen.
+- **Abschiedsfest** (60 Gold): Der Held zieht in die Welt hinaus; gute Laune im Dorf, Ruf +12.
+- **„Bleib noch ein paar Tage.“** (einmal, 3 Tage Aufschub) oder **„Folge deinem Herzen.“** (er entscheidet selbst).
+- Wer dir vertraut, lässt beim Fortgehen etwas da (Gold, ab Vertrauen 50 seltene Materialien).
+- **Verbitterte** (Vertrauen unter 10, mindestens 4 Tage) wollen im Groll gehen: Aussprache (50 Gold, die Verbitterung
+  löst sich) oder gehen lassen.
+
+**Dorfbewohner** haben eine Aufgabe mit dauerhaftem Nutzen (bis zu drei je Aufgabe zählen): Krieger werden Ausbilder
+(Helden lernen 10 % schneller, Neuankömmlinge eine Stufe höher), Waldläufer Kundschafter (alle Gebiete 4 % weniger
+gefährlich), Magier Kräuterkundige (Verletzungen heilen 10 %, Heiltränke brauen 15 % schneller). Sie stehen im
+Hintergrund der Dorfszene, geben manchmal Bestellungen auf und sind im Tab „Dorf“ aufgeführt.
+
+Die **Dorfchronik** (Tab „Dorf“) bewahrt jeden Helden, der einmal hier war: Stufe, Schicksal, Zeit im Dorf und die
+wichtigsten Seiten seines Heldenbuchs. Ein freies Zimmer zieht bald einen neuen Helden an.
+
+## Mehrtägige Geschichten
+
+Etwa alle zwei bis vier Tage beginnt eine Geschichte, die sich über Stunden oder Tage zieht (`src/sagas.js`). Es läuft
+immer nur eine zugleich. Ihre Entscheidungen kommen als Besucher an den Tresen, der Ausgang steht in Chronik und Heldenbuch.
+
+| Geschichte | Auslöser | Deine Entscheidung | Ausgang |
+|---|---|---|---|
+| 🕯️ Verschollen | Ein Held kehrt aus einem gefährlichen Gebiet nicht zurück (ohne Heiltrank deutlich öfter) | Einen Freund auf die Suche schicken (60 Gold), Kopfgeld für Hinweise (150 Gold) oder abwarten | Gerettet: leicht verletzt, tiefe Dankbarkeit, Freundschaft mit dem Retter. Allein zurück: schwer verletzt, fühlt sich im Stich gelassen. |
+| 🔥 Eine offene Rechnung | Ein Held hat sich von einer schweren Niederlage erholt und schwört Rache | Ausrüsten (40 Gold, Heiltrank), ausreden oder schulterzucken | Sieg tilgt die Narbe; eine Niederlage nach deinem Zuspruch geht auf deine Kappe. |
+| 🗺️ Eine alte Karte | Ein Held findet unterwegs eine Schatzkarte fürs nächstschwerere Gebiet | Zur Suche raten (allein oder mit einem Freund), die Karte abkaufen (Gebiet bringt allen 12 Std. dreifach Gold) oder abraten | Schatz: viel Gold für den Helden, bei Vertrauen seltene Materialien für dich. Reinfall: Er gibt dir die Schuld. |
+
+## Die große Gefahr (Finale und Kapitel)
+
+Wurde der Drachenhorst dreimal geplündert, erwacht **Vharzul, der Aschenfürst** (`src/threat.js`). Das Dorf hat zwei
+Tage Zeit, sich zu rüsten – dann stellen sich alle Helden, die im Dorf sind, gemeinsam zum Kampf.
+
+- **Stärke des Dorfes**: Kraft der Kämpfer × Vorbereitungen × Kampfmoral (Laune) × Rückhalt (Dorfbewohner). Die Stärke
+  der Gefahr bemisst sich an den Helden, die beim Erwachen da sind – sie ist immer eine echte Prüfung.
+- **Vorbereitungen** kosten Gold (das Ziel für angespartes Gold; je Kapitel 50 % teurer): Klingen schärfen (+15 %),
+  Heiltränke für alle (leichtere Verletzungen), Palisaden (halber Schaden am Dorf), Ballista (+35 %).
+- **Ein Held zögert** und fragt dich: an die Front oder das Dorf schützen (zählt nicht zur Stärke, mindert aber Schäden)?
+- **Ausgang**: glänzender Sieg, schwer erkämpfter Sieg, vertrieben (das Ungeheuer kehrt nach 3–4 Tagen geschwächt
+  zurück) oder Niederlage (Gold und Waren gehen verloren, es kehrt ebenfalls zurück). Vorbereitungen bleiben erhalten.
+- **Nach dem Sieg**: Der stärkste Kämpfer trägt einen Ehrentitel (z. B. Drachentöterin), das Dorf bekommt eine Trophäe
+  am Tavernengiebel, die Tat steht unter „Große Taten“ in der Dorfchronik, und ein neues Kapitel beginnt. Nach 12–16
+  Tagen regt sich die nächste Gefahr (Frostwurm, Trollkönig, Spinnenmutter, dann von vorn – jedes Mal stärker).
+- In der Szene: glutroter Himmel, der Drache kreist über dem Horst, die Ballista steht auf dem Dorfplatz. Nach Vharzuls
+  Ende erlischt die Glut am Drachenhorst.
+
+## Gedankenblasen
+
+Über den Helden in der Dorfszene zeigt ein kleines Symbol, was sie gerade beschäftigt: 🛒 will etwas, das zu teuer ist,
+😨 traut sich nicht, 🧪 braucht einen Heiltrank, 🌟 träumt vom Wunsch, 💭 erinnert sich, 💢 ärgert sich über den Rivalen,
+💛 sorgt sich um einen Freund, 🍺 hat keine Lust, ❗ wartet an deinem Tresen.
 
 ## Wesenswandel
 
@@ -137,7 +215,7 @@ Aktive Einflüsse stehen als Chips unter der Dorfszene.
 | 🐪 Händlerkarawane | seltene Materialien teuer kaufen, Grundstoffe im Großeinkauf oder nichts |
 | 🐺 Wolfsplage | Prämie ausloben (Finsterwald bringt 8 Std. 2,5× Gold) oder vertrösten (Finsterwald gefährlicher) |
 | 🏆 Turnier | Preisgeld stiften (danach Turnierruhm: Helden trauen sich mehr zu) oder nur zuschauen; so oder so zieht ein paar Stunden niemand los |
-| 🌧️ Dauerregen | Abenteuer dauern länger; Regenüberzüge nähen: kommen vorne in die Warteschlange (Stoff wird gekauft), bringen 110 🪙 – nur die Hälfte, wenn der Regen schon vorbei ist |
+| 🌧️ Dauerregen | Abenteuer dauern länger, die Laune sinkt; heißen Met ausschenken (Laune +10) oder abwarten |
 | ⛓️ Eisenmangel | Eisen kostet 16 Std. das Dreifache; letzten Wagen zum alten Preis kaufen? |
 | ⚒️ Meisterschmied | anheuern: 8 Std. lang 60 % schneller schmieden |
 | 🌾 Erntefest | großes Fest (Laune hoch, aber niemand zieht los), Fass spendieren oder nichts |
@@ -146,7 +224,6 @@ Aktive Einflüsse stehen als Chips unter der Dorfszene.
 | 👺 Goblin-Überfall | Helden als Wachen bezahlen, Stadtwache anfordern oder riskieren (Diebstahl) |
 | 🧙‍♀️ Kräuterfrau | billige Kräuter oder ihr Rezept (Heiltränke doppelt so schnell) |
 | 🎶 Barde | bezahlen, damit er bleibt: bessere Laune, mehr Neuankömmlinge |
-| 🛒 Konkurrenz am Markt | Helden kaufen 12 Std. nur halb so oft bei dir; Händler wegschicken? |
 
 ## Bestellungen
 
@@ -158,7 +235,7 @@ Einträge in der Warteschlange lassen sich nach vorne schieben.
 
 ## Ziele und Dorfprojekte
 
-- **Ziele**: eine Kette von 15 Zielen (vom ersten Verkauf bis zum Helden in voller Drachenausrüstung) mit Belohnungen.
+- **Ziele**: eine Kette von 21 Zielen (vom ersten Verkauf über den Helden in voller Drachenausrüstung und die gefüllte Dorfchronik bis zu den großen Gefahren) mit Belohnungen.
   Das aktuelle Ziel steht oben in der Chronik und im Dorf-Tab.
 - **Dorfprojekte**: einmalige Gold-Investitionen mit dauerhaftem Bonus: Dorfbrunnen, Heilerhütte, Marktplatz,
   Wachturm, Bardenbühne, Heldendenkmal (250 bis 3.000 Gold).
@@ -186,9 +263,12 @@ wiederholt. Dazu kommen Varianten nach Tageszeit, Schatzjagd-Texte und Nachsätz
 
 ## Darstellung
 
-- Dorfszene als gezeichnete Vektorgrafik (Canvas, Bilderbuch-Stil mit Konturen und Verläufen) mit Tag/Nacht. Helden, die im Dorf sind, laufen herum; nachts sind sie in der Taverne.
+- Dorfszene als gezeichnete Vektorgrafik (Canvas, Bilderbuch-Stil mit Konturen und Verläufen) mit Tag/Nacht. Die Helden, die gerade im Dorf sind, stehen groß im Vordergrund auf dem gepflasterten Dorfplatz (ohne Herumlaufen). Man sieht ihnen Ausrüstung, Heiltränke am Gürtel, Laune (Gesicht), Erschöpfung (sitzen mit Krug, müde Augen, Schmutz; nachts schlafend) und Verletzungen (Verbände, Armschlinge, Blutergüsse) an.
 - **Die Helden tragen sichtbar, was du ihnen verkauft hast**: Rüstungsfarbe, Helm, Kapuze oder Hut und die Waffe
   ändern sich je Stufe. Antippen öffnet die Heldenkarte mit großem Porträt.
+- Errichtete Dorfprojekte stehen sichtbar im Dorf (Brunnen, Zelt der Heilerin, Marktkarren, Wachturm, Bühne, Denkmal);
+  Regen, Feste (Wimpelkette) und Musik sind in der Szene zu sehen.
+- Verletzungen: leicht (Kopfverband, Schrammen) nach einer Niederlage mit Heiltrank, schwer (Schlinge, Verbände, blass) ohne.
 - Rauch und Glut in der Esse, wenn gearbeitet wird; Waren im Schaufenster; Zettel am Auftragsbrett.
 
 ## Technik
@@ -202,10 +282,8 @@ wiederholt. Dazu kommen Varianten nach Tageszeit, Schatzjagd-Texte und Nachsätz
 
 ## Ideen für später
 
-- **Großes Ziel**: Drachensieg, Prestige (neues Dorf gründen, Bonus bleibt)
 - **Weitere Quest-Arten**: Monsterjagd, Eskorte, Rettungsmission für einen verschollenen Helden
 - **Mehr Beziehungen**: Liebe, Lehrer und Schüler, Gruppen aus mehr als zwei Helden
-- **Mehr Ereignisse**: Drachenangriff aufs Dorf, Ketten-Ereignisse über mehrere Tage
+- **Mehr Geschichten**: weitere mehrtägige Fäden (Liebe, Erbschaft, ein Fremder mit Geheimnis), Briefe von Fortgezogenen
 - **Legendäre Gegenstände** mit Namen, Verzauberungen
-- **Erinnerungen**: Helden merken sich, wer ihnen gute Ausrüstung verkauft hat und wo sie verletzt wurden
 - Mehr Werkstätten (Alchemist, Gerberei, Runenschnitzer) und Zwischenprodukte

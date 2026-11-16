@@ -7,6 +7,7 @@ import { RECIPES, MATERIALS, AREAS } from '../src/data.js';
 import { EVENT_BY_ID } from '../src/events.js';
 import { PROJECTS } from '../src/goals.js';
 import { requestOptions, resolveRequest } from '../src/requests.js';
+import { PREPS, buyPrep, prepCost } from '../src/threat.js';
 
 const days = Number(process.argv[2] ?? 14);
 const seed = Number(process.argv[3] ?? 42);
@@ -18,10 +19,12 @@ const VISITS = [7 * 60, 10 * 60, 13 * 60, 17 * 60, 21 * 60]; // Uhrzeiten der Be
 
 function botVisit() {
   // Bitte: zufällige Antwort (außer der Vorgabe „keine Zeit“)
-  if (s.request) {
-    const n = requestOptions(s).length;
-    for (let tries = 0; tries < 5 && s.request; tries++) resolveRequest(s, Math.floor(Math.random() * Math.max(1, n - 1)));
+  for (const q of [...s.requests]) {
+    const n = requestOptions(s, q).length;
+    for (let tries = 0; tries < 5 && s.requests.includes(q); tries++) resolveRequest(s, q, Math.floor(Math.random() * Math.max(1, n - 1)));
   }
+  // Bedrohung: vorbereiten, was die Kasse hergibt (ein Polster bleibt)
+  if (s.threat?.deadline) for (const id of Object.keys(PREPS)) if (!s.threat.prep[id] && s.gold > prepCost(s, id) + 300) buyPrep(s, id);
   // Ereignis: zufällige bezahlbare Option
   if (s.event) {
     const n = EVENT_BY_ID[s.event.id].options.length;
@@ -40,7 +43,7 @@ function botVisit() {
     }
   }
   for (const id of Object.keys(PROJECTS)) if (s.gold > PROJECTS[id].cost + 300) buildProject(s, id);
-  for (const id of ['schmiede', 'laden', 'taverne', 'lager']) if (canUpgrade(s, id) && s.gold > 150) upgrade(s, id);
+  for (const id of ['schmiede', 'laden', 'taverne']) if (canUpgrade(s, id) && s.gold > 150) upgrade(s, id);
   const next = upgradeCost(s, 'schmiede');
   for (const [m, n] of Object.entries(next ?? {})) {
     if (m !== 'gold' && s.mats[m] < n && !s.bounties.some((b) => b.mat === m) && s.gold > 150) {

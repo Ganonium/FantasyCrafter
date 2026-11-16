@@ -57,25 +57,12 @@ export function banter(s, r, a, b) {
   if (r.chance(Math.max(0.1, Math.min(0.92, friendly)))) {
     log(s, 'banter', fmt(say(s, r, 'banterFriendly', T.banterFriendly), a, { o: `**${b.name}**` }), a.id);
     changeMood(a, 3); changeMood(b, 3);
-    changeRelation(s, r, a, b, r.int(6, 11));
+    changeRelation(s, r, a, b, r.int(9, 15));
   } else {
     log(s, 'banter', fmt(say(s, r, 'banterRival', T.banterRival), a, { o: `**${b.name}**` }), a.id);
     changeMood(a, -1); changeMood(b, -1);
-    changeRelation(s, r, a, b, -r.int(6, 11));
+    changeRelation(s, r, a, b, -r.int(8, 13));
   }
-}
-
-// Wenn ein Held das Dorf verlässt: Freunde trauern, Beziehungen verschwinden
-export function heroLeft(s, r, h) {
-  for (const f of friendsOf(s, h)) {
-    changeMood(f, -12);
-    bump(f, 'bitterness');
-    log(s, 'social', fmt(say(s, r, 'friendLeft', T.friendLeft), f, { o: `**${h.name}**` }), f.id);
-    bio(s, f, '💔', `Verlor ${h.female ? 'die Freundin' : 'den Freund'} ${h.name} – ${h.female ? 'sie' : 'er'} hat Eichenfurt verlassen.`);
-  }
-  for (const o of s.heroes) if (o.mentor === h.id) { o.mentor = null; bio(s, o, '🎓', `Verlor ${h.female ? 'die Lehrmeisterin' : 'den Lehrmeister'} ${h.name}.`); }
-  if (h.debt) log(s, 'loan', `💰 Mit **${h.name}** verschwinden auch ${h.debt.amount} Gold Vorschuss.`, h.id);
-  for (const k of Object.keys(s.relations)) if (k.split('-').map(Number).includes(h.id)) delete s.relations[k];
 }
 
 // ---------- Gemeinsame Ausflüge ----------
@@ -111,15 +98,15 @@ export function findParty(s, r, h, soloBest) {
 
 // ---------- Persönliche Ziele ----------
 
-const GOAL_WEIGHTS = { gear: 40, area: 32, level: 10, gold: 10, bounty: 12 };
+const GOAL_WEIGHTS = { gear: 40, area: 32, bounty: 14 };
 
 function pickGoalType(r, h) {
   const w = { ...GOAL_WEIGHTS };
   if (h.traits.includes('ruhmsuechtig') || h.traits.includes('mutig')) w.area += 40;
-  if (h.traits.includes('gierig')) { w.bounty += 30; w.gold += 15; }
-  if (h.traits.includes('geizig')) w.gold += 40;
+  if (h.traits.includes('gierig')) w.bounty += 40;
+  if (h.traits.includes('geizig')) w.gear += 20;
   if (h.traits.includes('vorsichtig')) w.gear += 30;
-  if (h.traits.includes('eifrig')) w.level += 25;
+  if (h.traits.includes('eifrig')) w.area += 20;
   const total = Object.values(w).reduce((a, b) => a + b, 0);
   let roll = r() * total;
   return Object.keys(w).find((k) => (roll -= w[k]) < 0) ?? 'gear';
@@ -142,15 +129,8 @@ export function assignGoal(s, r, h) {
     const target = evals.find((e) => e.block === 'danger') ?? (h.successes ? null : evals[0]);
     if (target) { h.goal = { type: 'area', area: target.id, since: s.t }; return; }
   }
-  if (type === 'gold') {
-    h.goal = { type, amount: Math.round((Math.floor(h.gold) + 150 + h.level * 40) / 10) * 10, since: s.t };
-    return;
-  }
-  if (type === 'bounty') {
-    h.goal = { type, start: h.bountiesDone ?? 0, since: s.t };
-    return;
-  }
-  h.goal = { type: 'level', level: h.level + 2, since: s.t };
+  // sonst (oder wenn Ausrüstung und Gebiete ausgereizt sind): ein Kopfgeld kassieren
+  h.goal = { type: 'bounty', start: h.bountiesDone ?? 0, since: s.t };
 }
 
 // { text, cur, max, done }
@@ -170,11 +150,6 @@ export function goalProgress(s, h) {
       return { text: `${AREAS[g.area].name} bezwingen`, short: AREAS[g.area].name, cur: p, max: 100,
         done: (h.areaWins?.[g.area] ?? 0) > (g.wins0 ?? 0), unit: '% Chance' };
     }
-    case 'level':
-      return { text: `Stufe ${g.level} erreichen`, short: `Stufe ${g.level}`, cur: h.level, max: g.level, done: h.level >= g.level, unit: '' };
-    case 'gold':
-      return { text: `${g.amount} Gold ansparen`, short: `${g.amount} Gold`, cur: Math.min(Math.floor(h.gold), g.amount), max: g.amount,
-        done: h.gold >= g.amount, unit: '🪙' };
     case 'bounty':
       return { text: 'ein Kopfgeld kassieren', short: 'Kopfgeld', cur: (h.bountiesDone ?? 0) - g.start, max: 1,
         done: (h.bountiesDone ?? 0) > g.start, unit: '' };
@@ -192,8 +167,6 @@ export function goalThought(s, r, h) {
     const a = AREAS[g.area];
     return fmt(tpl, h, { A: a.name, zu: a.zu });
   }
-  if (g.type === 'level') return fmt(tpl, h, { x: g.level });
-  if (g.type === 'gold') return fmt(tpl, h, { x: g.amount });
   return fmt(tpl, h);
 }
 
@@ -210,7 +183,7 @@ export function checkHeroGoal(s, r, h) {
   }
   const p = goalProgress(s, h);
   if (!p?.done) return;
-  changeMood(h, 20);
+  changeMood(h, 14);
   s.reputation += 3;
   h.goalsDone = (h.goalsDone ?? 0) + 1;
   log(s, 'herogoal', fmt(say(s, r, 'heroGoalDone', T.heroGoalDone), h, { x: p.text }), h.id);
@@ -232,7 +205,6 @@ export function goalAreaBonus(h, areaId) {
 export function goalDrive(s, h) {
   const g = h.goal;
   if (!g) return 0;
-  if (g.type === 'gold' || g.type === 'level') return 0.1;
   if (g.type === 'gear' && h.gold < priceOf(s, g.recipe)) return 0.1;
   return 0;
 }

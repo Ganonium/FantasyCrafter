@@ -4,6 +4,7 @@ import { RECIPES } from './data.js';
 
 const maxHeroLevel = (s) => Math.max(0, ...s.heroes.map((h) => h.level));
 const delivered = (s, m) => s.stats.delivered?.[m] ?? 0;
+const settled = (s) => (s.legacy ?? []).filter((l) => l.fate === 'settled').length;
 
 // check(s) → [aktuell, Ziel]
 export const GOALS = [
@@ -26,6 +27,14 @@ export const GOALS = [
     check: (s) => [s.heroes.some((h) => h.weapon && h.armor && RECIPES[h.weapon].tier === 4 && RECIPES[h.armor].tier === 4) ? 1 : 0, 1],
     reward: { gold: 1500 },
   },
+  // Kommen und Gehen: das Dorf wächst über seine Helden hinaus
+  { text: 'Verabschiede einen Helden', check: (s) => [(s.legacy ?? []).length, 1], reward: { gold: 300 } },
+  { text: 'Ein Held wird in Eichenfurt sesshaft', check: (s) => [settled(s), 1], reward: { mondkristall: 3 } },
+  { text: 'Drei Dorfbewohner leben in Eichenfurt', check: (s) => [settled(s), 3], reward: { trollknochen: 3 } },
+  { text: 'Zehn Helden stehen in der Dorfchronik', check: (s) => [(s.legacy ?? []).length, 10], reward: { drachenschuppe: 3 } },
+  // Das Finale – und was danach kommt
+  { text: 'Bezwinge Vharzul, den Aschenfürsten', check: (s) => [(s.deeds ?? []).some((d) => d.id === 'vharzul') ? 1 : 0, 1], reward: { gold: 2000 } },
+  { text: 'Überstehe drei große Gefahren', check: (s) => [s.chapter ?? 0, 3], reward: { gold: 5000 } },
 ];
 
 // mods wie bei Ereignis-Effekten: { key, v, area?, mat? }

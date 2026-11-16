@@ -1,15 +1,16 @@
 // Dorfszene auf Canvas (Vektorgrafik): Gebäude, Tageszeit und die Helden, die gerade im Dorf sind.
-// Logische Koordinaten 200 × 112, gerendert in voller Bildschirmauflösung.
+// Logische Koordinaten 200 × 124, gerendert in voller Bildschirmauflösung.
 
-import { drawHero } from './sprites.js';
+import { drawHero, heroLook } from './sprites.js';
 import { RECIPES } from './data.js';
-import { clockOf, isNight } from './sim.js';
+import { clockOf, isNight, activeEffects } from './sim.js';
+import { villagers } from './farewell.js';
+import { legacyHero } from './ui.js';
 
 export const W = 200;
-export const H = 112;
-const EXIT = { x: 214, y: 100 };
-const TAVERN_DOOR = { x: 166.5, y: 82 };
-const HERO_SIZE = 21;
+export const H = 124;
+// Helden stehen in zwei Reihen auf dem Dorfplatz vor den Häusern
+const ROWS = [{ y: 119, size: 37 }, { y: 110, size: 33 }];
 const LINE = '#2a1c14';
 const LW = 0.45;
 
@@ -29,9 +30,12 @@ export class VillageScene {
       const x = ((e.clientX - rect.left) / rect.width) * W;
       const y = ((e.clientY - rect.top) / rect.height) * H;
       const hit = [...this.actors.values()]
-        .filter((a) => !a.hidden && x >= a.x - 8 && x <= a.x + 8 && y >= a.y - 30 && y <= a.y + 2)
+        .filter((a) => a.alpha > 0.5 && Math.abs(x - a.x) <= a.size * 0.38 && y >= a.y - a.size * 1.3 && y <= a.y + 2)
         .sort((a, b) => b.y - a.y)[0];
-      if (hit) onHeroTap(hit.id);
+      if (hit) return onHeroTap(hit.id);
+      // dahinter: Dorfbewohner
+      const v = (this.villagerSpots ?? []).find((p) => Math.abs(x - p.x) <= 5 && y >= p.y - 30 && y <= p.y + 2);
+      if (v) onHeroTap(v.id, 'legacy');
     });
     this.resize();
     window.addEventListener('resize', () => this.resize());
@@ -49,65 +53,38 @@ export class VillageScene {
     return this.seed / 2147483647;
   }
 
-  randomSpot(hero) {
-    if (hero.state === 'rest') return { x: 140 + this.rand() * 52, y: 86 + this.rand() * 18 };
-    const spots = [
-      { x: 30, y: 86 }, { x: 94, y: 86 }, { x: 131, y: 88 }, { x: 166, y: 86 },
-    ];
-    if (this.rand() < 0.45) {
-      const s = spots[Math.floor(this.rand() * spots.length)];
-      return { x: s.x + (this.rand() - 0.5) * 10, y: s.y + this.rand() * 4 };
-    }
-    return { x: 12 + this.rand() * 180, y: 86 + this.rand() * 22 };
-  }
-
+  // Wer im Dorf ist, bekommt einen festen Platz (nach Ankunft sortiert); Kommen und Gehen wird überblendet.
   sync(state) {
-    const night = isNight(state);
-    for (const h of state.heroes) {
-      const inVillage = h.state !== 'away';
+    const present = state.heroes.filter((h) => h.state !== 'away');
+    for (const h of present) {
       let a = this.actors.get(h.id);
-      if (inVillage && (!a || a.leaving)) {
-        const start = this.first ? this.randomSpot(h) : { ...EXIT };
-        a = { id: h.id, x: start.x, y: start.y, tx: start.x, ty: start.y, wait: this.rand() * 2, flip: true, phase: 0, moving: false };
-        if (this.first && night) { a.hidden = true; a.x = TAVERN_DOOR.x; a.y = TAVERN_DOOR.y; }
+      if (!a) {
+        a = { id: h.id, alpha: this.first ? 1 : 0, x: null, y: 0, size: 0 };
         this.actors.set(h.id, a);
       }
-      if (a) a.hero = h;
-      if (a && !inVillage && !a.leaving) {
-        a.leaving = true; a.hidden = false; a.tx = EXIT.x; a.ty = EXIT.y; a.wait = 0;
-      }
-      if (a && inVillage) {
-        a.injured = h.state === 'injured';
-        a.night = night;
-      }
+      a.hero = h;
+      a.leaving = false;
     }
-    for (const [id, a] of this.actors) if (!state.heroes.some((h) => h.id === id)) { a.leaving = true; a.tx = EXIT.x; a.ty = EXIT.y; }
+    for (const a of this.actors.values()) if (!present.some((h) => h.id === a.id)) a.leaving = true;
+    const staying = [...this.actors.values()].filter((a) => !a.leaving).sort((a, b) => a.id - b.id);
+    const n = staying.length;
+    staying.forEach((a, i) => {
+      // abwechselnd vorne/hinten, gleichmäßig über die Breite verteilt
+      const row = n > 3 ? ROWS[i % 2] : ROWS[0];
+      a.tx = 16 + (168 * (i + 0.5)) / Math.max(n, 1);
+      a.y = row.y; a.size = row.size;
+      if (a.x === null) a.x = a.tx;
+      a.flip = a.tx > 100;
+    });
+    this.night = isNight(state);
     this.first = false;
   }
 
   update(dt) {
     for (const [id, a] of this.actors) {
-      const speed = a.injured ? 6 : 14;
-      a.moving = false;
-      if (a.night && !a.leaving) { a.tx = TAVERN_DOOR.x; a.ty = TAVERN_DOOR.y; a.wait = 0; }
-      if (!a.night && a.hidden) { a.hidden = false; a.wait = 1 + this.rand() * 3; }
-      if (a.wait > 0) { a.wait -= dt; continue; }
-      const dx = a.tx - a.x, dy = a.ty - a.y;
-      const dist = Math.hypot(dx, dy);
-      if (dist < 0.8) {
-        if (a.leaving) { this.actors.delete(id); continue; }
-        if (a.night) { a.hidden = true; continue; }
-        a.wait = 2 + this.rand() * 6;
-        const s = this.randomSpot(a.hero);
-        a.tx = s.x; a.ty = s.y;
-        continue;
-      }
-      const step = Math.min(dist, speed * dt);
-      a.x += (dx / dist) * step;
-      a.y += (dy / dist) * step;
-      if (Math.abs(dx) > 0.5) a.flip = dx < 0;
-      a.moving = true;
-      a.phase += dt * (a.injured ? 6 : 11);
+      a.alpha = Math.max(0, Math.min(1, a.alpha + (a.leaving ? -dt * 1.5 : dt * 1.5)));
+      if (a.leaving && a.alpha <= 0) { this.actors.delete(id); continue; }
+      if (a.x !== null && a.tx !== undefined) a.x += (a.tx - a.x) * Math.min(1, dt * 3);
     }
     for (const p of this.smoke) { p.y -= dt * 5; p.x += dt * 2.5; p.r += dt * 0.9; p.life -= dt; }
     this.smoke = this.smoke.filter((p) => p.life > 0);
@@ -125,12 +102,20 @@ export class VillageScene {
     this.windowsLit = [];
 
     this.drawSky(ctx, minute, light, time);
+    this.dragonGone = (state.deeds ?? []).some((d) => d.id === 'vharzul');
     this.drawLandscape(ctx, light, time);
+    const fx = new Set(activeEffects(state).map((e) => e.icon));
+    if (state.projects.wachturm !== undefined) this.drawTower(ctx, light, time);
     this.drawSmithy(ctx, state, light);
     this.drawShop(ctx, state, light);
     this.drawBoard(ctx, state, light);
     this.drawTavern(ctx, state, light);
     this.drawProps(ctx, state, light);
+    this.drawProjects(ctx, state, light, time);
+    if ((state.deeds ?? []).length) this.drawTrophy(ctx, light, state.deeds.length);
+    if (state.threat?.deadline) this.drawOmen(ctx, state, light, time);
+    if (fx.has('🏆') || fx.has('🎉')) this.drawBunting(ctx, light, time);
+    if (fx.has('🎶') || state.projects.buehne !== undefined) this.drawNotes(ctx, time, fx.has('🎶'));
 
     // Rauch über der Esse
     const crafting = state.slots.some((s) => s && !s.blocked);
@@ -140,29 +125,12 @@ export class VillageScene {
       ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2); ctx.fill();
     }
 
-    // Helden nach Tiefe sortiert
-    const actors = [...this.actors.values()].filter((a) => !a.hidden && a.hero).sort((a, b) => a.y - b.y);
-    for (const a of actors) {
-      drawHero(ctx, a.hero, a.x, a.y, { flip: a.flip, walk: a.phase, moving: a.moving, time, injured: a.injured, size: HERO_SIZE });
-      const emo = a.injured ? '🩹' : a.hero.state === 'rest' ? '🍺' : null;
-      if (emo && !a.leaving) {
-        ctx.font = '5px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.fillText(emo, a.x + 6, a.y - 25);
-      }
-      if (this.selected === a.id) {
-        const bob = Math.sin(time / 200) * 0.8;
-        ctx.beginPath();
-        ctx.moveTo(a.x - 2.2, a.y - 34 + bob); ctx.lineTo(a.x + 2.2, a.y - 34 + bob); ctx.lineTo(a.x, a.y - 31 + bob); ctx.closePath();
-        ctx.fillStyle = '#ffd95a'; ctx.fill(); ctx.strokeStyle = LINE; ctx.lineWidth = 0.4; ctx.stroke();
-      }
-    }
-
-    // Nacht: abdunkeln, dann Lichter
-    if (light < 0.95) {
-      ctx.fillStyle = `rgba(12,16,46,${(0.95 - light) * 0.58})`;
+    // Nacht: Kulisse abdunkeln, dann Lichter
+    const dark = light < 0.95 ? 0.95 - light : 0;
+    if (dark > 0) {
+      ctx.fillStyle = `rgba(12,16,46,${dark * 0.58})`;
       ctx.fillRect(0, 0, W, H);
-      const strength = Math.min(1, (0.95 - light) * 1.6);
+      const strength = Math.min(1, dark * 1.6);
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
       for (const l of this.lights) {
@@ -178,6 +146,57 @@ export class VillageScene {
         ctx.beginPath(); ctx.roundRect(wdw[0], wdw[1], wdw[2], wdw[3], 0.6); ctx.fill();
       }
     }
+
+    // Dorfbewohner (sesshaft gewordene Helden) gehen im Hintergrund ihrem Tagwerk nach; nachts sind sie zu Hause
+    this.villagerSpots = [];
+    if (!this.night) {
+      const spots = [[40, 99], [88, 100], [150, 99], [172, 100]];
+      villagers(state).slice(-spots.length).forEach((l, i) => {
+        const [vx, vy] = spots[i];
+        drawHero(ctx, legacyHero(l), vx, vy, { ...heroLook(legacyHero(l)), flip: vx > 100, time, size: 23 });
+        this.villagerSpots.push({ id: l.id, x: vx, y: vy });
+      });
+    }
+
+    // Vordergrund: die Helden, nach Tiefe sortiert. Sie bleiben auch nachts gut erkennbar.
+    const actors = [...this.actors.values()].filter((a) => a.hero && a.x !== null).sort((a, b) => a.y - b.y);
+    for (const a of actors) {
+      const look = heroLook(a.hero, this.night);
+      ctx.save();
+      ctx.globalAlpha = a.alpha;
+      drawHero(ctx, a.hero, a.x, a.y, { ...look, flip: a.flip, time, size: a.size });
+      ctx.restore();
+      const hat = a.hero.cls === 'magier' && a.hero.armor ? 0.28 : 0;
+      const top = a.y - a.size * ((look.pose === 'sit' ? 1.05 : 1.25) + hat);
+      // Gedankenblase: Wer am Tresen wartet, fällt auf; sonst zeigt ein Symbol, was den Helden beschäftigt
+      const waiting = state.requests?.some((q) => q.data.hero === a.id);
+      const icon = waiting ? '❗' : look.eyes === 'closed' || this.night ? null : a.hero.thoughtIcon;
+      if (icon && a.alpha > 0.5 && !a.leaving) bubble(ctx, a.x + (a.flip ? -3 : 3), top - 1.5, icon, waiting, time + a.id * 700);
+      if (look.eyes === 'closed' && a.alpha > 0.5) {
+        const t = time / 900 + a.id;
+        ctx.fillStyle = 'rgba(235,240,255,0.9)';
+        ctx.textAlign = 'center';
+        for (let i = 0; i < 3; i++) {
+          const ph = (t + i / 3) % 1;
+          ctx.globalAlpha = Math.sin(ph * Math.PI);
+          ctx.font = `bold ${2.2 + ph * 2}px sans-serif`;
+          ctx.fillText('z', a.x + (a.flip ? -4 : 4) + ph * 4 * (a.flip ? -1 : 1), top - ph * 6);
+        }
+        ctx.globalAlpha = 1;
+      }
+      if (this.selected === a.id) {
+        const bob = Math.sin(time / 200) * 0.8;
+        const y0 = top - 4 + bob;
+        ctx.beginPath();
+        ctx.moveTo(a.x - 2.4, y0 - 3); ctx.lineTo(a.x + 2.4, y0 - 3); ctx.lineTo(a.x, y0); ctx.closePath();
+        ctx.fillStyle = '#ffd95a'; ctx.fill(); ctx.strokeStyle = LINE; ctx.lineWidth = 0.4; ctx.stroke();
+      }
+    }
+    if (dark > 0) {
+      ctx.fillStyle = `rgba(12,16,46,${dark * 0.22})`;
+      ctx.fillRect(0, 0, W, H);
+    }
+    if (fx.has('🌧️')) this.drawRain(ctx, time);
     if (crafting) {
       const f = 0.6 + 0.4 * Math.sin(time / 110) * Math.sin(time / 43);
       ctx.save();
@@ -253,16 +272,18 @@ export class VillageScene {
     }
     // Drachenhorst
     peak(ctx, 146, 66, 62, 44, mix('#1e1e30', '#5a5670', light));
-    ctx.fillStyle = 'rgba(255,100,40,0.8)';
-    ctx.beginPath(); ctx.ellipse(177, 22.6, 2.4, 0.8, 0, 0, Math.PI * 2); ctx.fill();
-    const glowA = 0.25 + 0.1 * Math.sin(time / 700);
-    const dg = ctx.createRadialGradient(177, 22, 0, 177, 22, 9);
-    dg.addColorStop(0, `rgba(255,110,50,${glowA})`); dg.addColorStop(1, 'rgba(255,110,50,0)');
-    ctx.fillStyle = dg; ctx.fillRect(168, 13, 18, 18);
-    const t = time / 1000;
-    for (let i = 0; i < 5; i++) {
-      ctx.fillStyle = `rgba(90,90,100,${0.35 - i * 0.05})`;
-      ctx.beginPath(); ctx.arc(177 + Math.sin(t + i) * 1.5 + i * 1.2, 20 - i * 3.2, 1 + i * 0.5, 0, Math.PI * 2); ctx.fill();
+    if (!this.dragonGone) { // Glut und Rauch – solange der Drache lebt
+      ctx.fillStyle = 'rgba(255,100,40,0.8)';
+      ctx.beginPath(); ctx.ellipse(177, 22.6, 2.4, 0.8, 0, 0, Math.PI * 2); ctx.fill();
+      const glowA = 0.25 + 0.1 * Math.sin(time / 700);
+      const dg = ctx.createRadialGradient(177, 22, 0, 177, 22, 9);
+      dg.addColorStop(0, `rgba(255,110,50,${glowA})`); dg.addColorStop(1, 'rgba(255,110,50,0)');
+      ctx.fillStyle = dg; ctx.fillRect(168, 13, 18, 18);
+      const t = time / 1000;
+      for (let i = 0; i < 5; i++) {
+        ctx.fillStyle = `rgba(90,90,100,${0.35 - i * 0.05})`;
+        ctx.beginPath(); ctx.arc(177 + Math.sin(t + i) * 1.5 + i * 1.2, 20 - i * 3.2, 1 + i * 0.5, 0, Math.PI * 2); ctx.fill();
+      }
     }
 
     // Hügel
@@ -304,6 +325,197 @@ export class VillageScene {
     for (let i = 0; i < 26; i++) {
       ctx.beginPath(); ctx.ellipse((i * 23.7) % W, 94 + ((i * 7.3) % 9), 0.9, 0.5, 0, 0, Math.PI * 2); ctx.fill();
     }
+    // Blumen in der Wiese
+    const petals = ['#f4e06a', '#f08aa0', '#ffffff', '#b89af0'];
+    for (let i = 0; i < 22; i++) {
+      const x = (i * 47.9 + 5) % W, y = 82 + ((i * 11.3) % 9);
+      ctx.fillStyle = mix('#5a5a70', petals[i % 4], 0.25 + light * 0.75);
+      ctx.beginPath(); ctx.arc(x, y, 0.55, 0, Math.PI * 2); ctx.fill();
+    }
+    // Dorfplatz: Kopfsteinpflaster, auf dem die Helden stehen
+    const paveTop = (x) => 103.5 + Math.sin(x / 31) * 1.2;
+    ctx.beginPath(); ctx.moveTo(-5, paveTop(-5));
+    for (let x = 0; x <= 205; x += 5) ctx.lineTo(x, paveTop(x));
+    ctx.lineTo(205, H + 2); ctx.lineTo(-5, H + 2); ctx.closePath();
+    const pg = ctx.createLinearGradient(0, 102, 0, H);
+    pg.addColorStop(0, mix('#33302c', '#b9ad98', light)); pg.addColorStop(1, mix('#2a2824', '#a39782', light));
+    ctx.fillStyle = pg; ctx.fill();
+    ctx.strokeStyle = mix('#201e1c', '#857a68', light); ctx.lineWidth = 0.5; ctx.stroke();
+    const cobA = mix('#3c3934', '#cbc0aa', light), cobB = mix('#2e2c28', '#a99d88', light);
+    for (let row = 0; row < 7; row++) {
+      const y = 105.2 + row * 2.9;
+      const w = 5.2 + row * 0.35;
+      for (let i = -1; i < W / w + 1; i++) {
+        const x = i * w + (row % 2) * w * 0.5;
+        if (y < paveTop(x + w / 2) + 0.6) continue;
+        ctx.fillStyle = (i * 7 + row * 3) % 5 === 0 ? cobB : cobA;
+        ctx.beginPath(); ctx.roundRect(x + 0.35, y, w - 0.7, 2.3, 0.9); ctx.fill();
+      }
+    }
+  }
+
+  // ---------- Dorfprojekte und Ereignisse ----------
+
+  // Trophäe am Giebel der Taverne: ein gehörnter Schädel je bezwungenem Ungeheuer (höchstens drei)
+  drawTrophy(ctx, light, n) {
+    const bone = mix('#6a6658', '#f0e8d0', light);
+    for (let i = 0; i < Math.min(3, n); i++) {
+      const x = 167 + (i - (Math.min(3, n) - 1) / 2) * 7, y = 38.5 + Math.abs(i - (Math.min(3, n) - 1) / 2) * 3.4;
+      ctx.strokeStyle = bone; ctx.lineWidth = 0.7; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(x - 1.2, y - 0.6); ctx.quadraticCurveTo(x - 3.4, y - 1.2, x - 3, y - 3.4);
+      ctx.moveTo(x + 1.2, y - 0.6); ctx.quadraticCurveTo(x + 3.4, y - 1.2, x + 3, y - 3.4); ctx.stroke();
+      ctx.fillStyle = bone; ctx.strokeStyle = LINE; ctx.lineWidth = 0.3;
+      ctx.beginPath(); ctx.moveTo(x - 1.6, y - 1.2); ctx.lineTo(x + 1.6, y - 1.2); ctx.lineTo(x + 1, y + 1.4); ctx.lineTo(x, y + 2.4); ctx.lineTo(x - 1, y + 1.4); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#1a1210';
+      ctx.beginPath(); ctx.arc(x - 0.7, y - 0.1, 0.4, 0, Math.PI * 2); ctx.arc(x + 0.7, y - 0.1, 0.4, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+
+  // Die Bedrohung kündigt sich an: glutroter Himmel, je näher der Kampf, desto stärker; der Drache kreist über dem Horst
+  drawOmen(ctx, s, light, time) {
+    const t = s.threat;
+    const near = 1 - Math.max(0, Math.min(1, (t.deadline - s.t) / 2880));
+    const g = ctx.createLinearGradient(0, 0, 0, 72);
+    g.addColorStop(0, `rgba(150,30,20,${0.18 + near * 0.3})`); g.addColorStop(1, 'rgba(150,30,20,0)');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, 72);
+    if (t.id === 'vharzul') {
+      const a = time / 2600;
+      const x = 150 + Math.cos(a) * (30 - near * 8), y = 20 + Math.sin(a * 2) * 5 + near * 4;
+      const flap = Math.sin(time / 180) * 2.4;
+      const dir = -Math.sin(a) >= 0 ? 1 : -1;
+      const k = 0.8 + near * 0.9;
+      ctx.save(); ctx.translate(x, y); ctx.scale(dir * k, k);
+      ctx.fillStyle = mix('#0c0a12', '#2a1a1c', light);
+      ctx.beginPath(); // Rumpf mit Hals und Schwanz
+      ctx.moveTo(6, -0.6); ctx.quadraticCurveTo(3, -1.6, 0, -1); ctx.quadraticCurveTo(-4, -0.8, -8, 0.6);
+      ctx.quadraticCurveTo(-4, 0.8, 0, 1); ctx.quadraticCurveTo(3, 1.2, 6, 0.4); ctx.closePath(); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(1.5, -0.6); ctx.lineTo(-1, -5 - flap); ctx.lineTo(-3.5, -1.2 - flap * 0.4); ctx.lineTo(-1.5, -0.4); ctx.closePath(); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(1.5, 0.4); ctx.lineTo(0, 3.6 + flap * 0.6); ctx.lineTo(-2.6, 1 + flap * 0.3); ctx.closePath(); ctx.fill();
+      ctx.restore();
+    } else {
+      // dunkle Wolkenbank, die näher rückt
+      ctx.fillStyle = `rgba(30,20,34,${0.35 + near * 0.35})`;
+      for (let i = 0; i < 7; i++) {
+        const x = ((i * 37 + time * 0.002) % 240) - 20;
+        ctx.beginPath(); ctx.ellipse(x, 6 + (i % 3) * 5 + near * 6, 22, 5.5, 0, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+    if (t.prep.ballista) { // die Ballista auf dem Dorfplatz
+      const wood = mix('#3a2818', '#8a5e36', light);
+      ctx.strokeStyle = wood; ctx.lineWidth = 1; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(96, 103.5); ctx.lineTo(100, 96); ctx.lineTo(104, 103.5); ctx.stroke();
+      ctx.lineWidth = 0.9; ctx.beginPath(); ctx.moveTo(95, 98); ctx.lineTo(107, 92.5); ctx.stroke();
+      ctx.lineWidth = 0.6; ctx.beginPath(); ctx.moveTo(97, 93.5); ctx.quadraticCurveTo(101.5, 96.5, 104, 98.2); ctx.stroke();
+      ctx.strokeStyle = mix('#444450', '#d8d8e0', light); ctx.lineWidth = 0.5;
+      ctx.beginPath(); ctx.moveTo(98, 96.6); ctx.lineTo(109.5, 91.3); ctx.stroke();
+    }
+  }
+
+  drawTower(ctx, light, time) {
+    const stone = mix('#34322e', '#a8a094', light);
+    box(ctx, 125.5, 44, 7, 38, stone, 0.5);
+    ctx.fillStyle = mix('#28261f', '#8a8276', light);
+    for (let y = 48; y < 80; y += 5) ctx.fillRect(126.5 + ((y / 5) % 2) * 2.5, y, 2.4, 1.4);
+    box(ctx, 124.3, 40.5, 9.4, 4, stone, 0.5);
+    for (const x of [124.3, 127.9, 131.5]) box(ctx, x, 38.2, 2.2, 2.5, stone, 0.4);
+    ctx.fillStyle = '#1a1a22'; ctx.beginPath(); ctx.roundRect(128, 50, 2, 3.6, 1); ctx.fill();
+    // Wimpel
+    ctx.strokeStyle = LINE; ctx.lineWidth = 0.4;
+    ctx.beginPath(); ctx.moveTo(129, 38.2); ctx.lineTo(129, 31); ctx.stroke();
+    const wave = Math.sin(time / 500) * 0.6;
+    ctx.fillStyle = '#3f72d6'; ctx.beginPath(); ctx.moveTo(129, 31); ctx.lineTo(134.5, 32.2 + wave); ctx.lineTo(129, 34); ctx.closePath(); ctx.fill();
+  }
+
+  drawProjects(ctx, s, light, time) {
+    const has = (id) => s.projects[id] !== undefined;
+    const wood = mix('#3a2818', '#8a5e36', light);
+    if (has('heiler')) { // Zelt der Heilerin am linken Rand
+      ctx.beginPath(); ctx.moveTo(1, 103); ctx.lineTo(8, 91); ctx.lineTo(15, 103); ctx.closePath();
+      ctx.fillStyle = mix('#3c4a3c', '#eef0e2', light); ctx.fill();
+      ctx.strokeStyle = LINE; ctx.lineWidth = LW; ctx.stroke();
+      ctx.fillStyle = mix('#1c2a1c', '#4a7a44', light);
+      ctx.beginPath(); ctx.moveTo(6.2, 103); ctx.lineTo(8, 96); ctx.lineTo(9.8, 103); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = mix('#2a4a2a', '#5aa04a', light); // Kräuterbündel als Zeichen
+      ctx.beginPath(); ctx.ellipse(8, 93.6, 1.1, 0.7, 0.5, 0, Math.PI * 2); ctx.fill();
+    }
+    if (has('markt')) { // Marktkarren
+      const x = 52, y = 101;
+      box(ctx, x, y - 5, 13, 3.4, wood, 0.4);
+      ctx.fillStyle = mix('#1e1a16', '#4a3a2a', light);
+      for (const wx of [x + 2.5, x + 10.5]) { ctx.beginPath(); ctx.arc(wx, y - 0.6, 1.7, 0, Math.PI * 2); ctx.fill(); }
+      const goods = ['#d84a3c', '#e6b84a', '#6ab04a', '#d84a3c'];
+      goods.forEach((c, i) => { ctx.fillStyle = mix('#444444', c, 0.3 + light * 0.7); ctx.beginPath(); ctx.arc(x + 2.2 + i * 2.9, y - 5.6, 1.2, 0, Math.PI * 2); ctx.fill(); });
+      ctx.strokeStyle = wood; ctx.lineWidth = 0.6;
+      ctx.beginPath(); ctx.moveTo(x + 0.5, y - 5); ctx.lineTo(x + 0.5, y - 12); ctx.moveTo(x + 12.5, y - 5); ctx.lineTo(x + 12.5, y - 12); ctx.stroke();
+      for (let i = 0; i < 5; i++) { ctx.fillStyle = mix('#555555', i % 2 ? '#f6eedc' : '#3f8a6a', 0.3 + light * 0.7); ctx.fillRect(x - 0.6 + i * 2.84, y - 13.4, 2.84, 2.2); }
+    }
+    if (has('denkmal')) { // Heldendenkmal
+      const x = 110;
+      box(ctx, x - 3.2, 97, 6.4, 5, mix('#34322e', '#b4aca0', light), 0.4);
+      ctx.fillStyle = mix('#3a3a40', '#c8c8d0', light); ctx.strokeStyle = LINE; ctx.lineWidth = 0.35;
+      ctx.beginPath(); ctx.roundRect(x - 1.4, 90.5, 2.8, 6.5, 1); ctx.fill(); ctx.stroke();
+      ctx.beginPath(); ctx.arc(x, 89.2, 1.5, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(x + 1.6, 92); ctx.lineTo(x + 3.6, 85.5); ctx.lineWidth = 0.7; ctx.strokeStyle = mix('#5a5a60', '#e8e8f0', light); ctx.stroke();
+    }
+    if (has('brunnen')) { // Dorfbrunnen
+      const x = 132;
+      box(ctx, x - 5, 96, 10, 5.5, mix('#34322e', '#a8a094', light), 0.45);
+      ctx.fillStyle = mix('#12202e', '#5a9ac8', light); ctx.beginPath(); ctx.ellipse(x, 96, 4.2, 1.1, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = wood; ctx.lineWidth = 0.7;
+      ctx.beginPath(); ctx.moveTo(x - 4.2, 96); ctx.lineTo(x - 4.2, 88.5); ctx.moveTo(x + 4.2, 96); ctx.lineTo(x + 4.2, 88.5); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(x - 6, 89); ctx.lineTo(x, 85.4); ctx.lineTo(x + 6, 89); ctx.closePath();
+      ctx.fillStyle = mix('#461612', '#9c3c2c', light); ctx.fill(); ctx.strokeStyle = LINE; ctx.lineWidth = 0.4; ctx.stroke();
+      ctx.strokeStyle = mix('#444444', '#d8d0c0', light); ctx.lineWidth = 0.3; ctx.beginPath(); ctx.moveTo(x, 89); ctx.lineTo(x, 93.5); ctx.stroke();
+      ctx.fillStyle = wood; ctx.fillRect(x - 0.9, 93.2, 1.8, 1.7);
+    }
+    if (has('buehne')) { // Bardenbühne vor der Taverne
+      box(ctx, 181, 99, 17, 3, wood, 0.4);
+      ctx.strokeStyle = wood; ctx.lineWidth = 0.7;
+      ctx.beginPath(); ctx.moveTo(182, 99); ctx.lineTo(182, 88); ctx.moveTo(197, 99); ctx.lineTo(197, 88); ctx.stroke();
+      ctx.fillStyle = mix('#3a1a3a', '#8a4a9a', light);
+      ctx.beginPath(); ctx.moveTo(181.5, 88); ctx.lineTo(197.5, 88); ctx.lineTo(197.5, 90.5); ctx.quadraticCurveTo(189.5, 93, 181.5, 90.5); ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = LINE; ctx.lineWidth = 0.35; ctx.stroke();
+    }
+  }
+
+  // Wimpelkette quer über den Platz – es wird gefeiert
+  drawBunting(ctx, light, time) {
+    const colors = ['#d84a3c', '#e6b84a', '#3f72d6', '#6ab04a', '#f6eedc'];
+    const yAt = (x) => 52 + Math.sin((x / W) * Math.PI) * 6 + Math.sin(time / 800 + x / 20) * 0.4;
+    ctx.strokeStyle = mix('#1e1a16', '#5a4a3a', light); ctx.lineWidth = 0.3;
+    ctx.beginPath(); ctx.moveTo(0, yAt(0)); for (let x = 4; x <= W; x += 4) ctx.lineTo(x, yAt(x)); ctx.stroke();
+    for (let i = 0; i < 28; i++) {
+      const x = 4 + i * 7;
+      ctx.fillStyle = mix('#444450', colors[i % 5], 0.35 + light * 0.65);
+      ctx.beginPath(); ctx.moveTo(x - 1.6, yAt(x - 1.6)); ctx.lineTo(x + 1.6, yAt(x + 1.6)); ctx.lineTo(x, yAt(x) + 3.4); ctx.closePath(); ctx.fill();
+    }
+  }
+
+  // Musik: Noten steigen auf (von der Bühne oder aus der Taverne)
+  drawNotes(ctx, time, lively) {
+    ctx.save();
+    ctx.fillStyle = 'rgba(255,250,230,0.9)'; ctx.textAlign = 'center';
+    const n = lively ? 4 : 2;
+    for (let i = 0; i < n; i++) {
+      const ph = ((time / 3200) + i / n) % 1;
+      ctx.globalAlpha = Math.sin(ph * Math.PI) * 0.9;
+      ctx.font = `${3 + (i % 2)}px sans-serif`;
+      ctx.fillText(i % 2 ? '♪' : '♫', 172 + i * 6 + Math.sin(ph * 6 + i) * 2, 62 - ph * 16);
+    }
+    ctx.restore();
+  }
+
+  drawRain(ctx, time) {
+    ctx.fillStyle = 'rgba(70,84,110,0.22)';
+    ctx.fillRect(0, 0, W, H);
+    ctx.strokeStyle = 'rgba(210,225,245,0.5)'; ctx.lineWidth = 0.3;
+    ctx.beginPath();
+    for (let i = 0; i < 90; i++) {
+      const x = (i * 53.7 + time * 0.02) % (W + 20) - 10;
+      const y = (i * 37.3 + time * 0.11 * (1 + (i % 3) * 0.15)) % (H + 10) - 5;
+      ctx.moveTo(x, y); ctx.lineTo(x - 1.2, y + 4.2);
+    }
+    ctx.stroke();
   }
 
   // ---------- Gebäude ----------
@@ -376,8 +588,8 @@ export class VillageScene {
       c.fillStyle = '#e6b84a'; c.beginPath(); c.arc(0, 0.4, 1.6, 0, Math.PI * 2); c.fill();
       c.strokeStyle = '#a07a2a'; c.lineWidth = 0.3; c.stroke();
     });
-    // Kisten (Lagerhaus)
-    for (let i = 0; i < s.buildings.lager; i++) {
+    // Kisten neben dem Laden (wachsen mit dem Ausbau)
+    for (let i = 0; i < lvl; i++) {
       const bx = x0 + w + 0.5 + (i % 2) * 0.8, by = 74 - i * 5.4;
       box(ctx, bx, by, 6, 5.4, mix('#4a3418', '#a87a40', light), 0.4);
       ctx.strokeStyle = mix('#3a2410', '#7a5428', light); ctx.lineWidth = 0.4;
@@ -472,7 +684,7 @@ export class VillageScene {
     ctx.fillStyle = mix('#3a2818', '#8a5e36', light);
     ctx.fillRect(144, 83, 14, 1.4); ctx.fillRect(145, 84.4, 0.9, 2.2); ctx.fillRect(156, 84.4, 0.9, 2.2);
     // Büsche vorne
-    for (const [bx, by, r] of [[3, 110, 6], [196, 109, 7], [60, 111, 4]]) {
+    for (const [bx, by, r] of [[1, 104, 5], [199, 104, 5.5]]) {
       ctx.fillStyle = mix('#163020', '#4e8a3c', light);
       ctx.beginPath(); ctx.arc(bx, by, r, 0, Math.PI * 2); ctx.arc(bx + r * 0.8, by + 1, r * 0.7, 0, Math.PI * 2); ctx.fill();
     }
@@ -480,6 +692,25 @@ export class VillageScene {
 }
 
 // ---------- Zeichenhilfen ----------
+
+function bubble(ctx, x, y, icon, urgent, time) {
+  const bob = Math.sin(time / (urgent ? 260 : 900)) * (urgent ? 0.9 : 0.4);
+  const r = urgent ? 4.6 : 4;
+  const cy = y - r - 1.6 + bob;
+  ctx.save();
+  ctx.fillStyle = urgent ? '#ffd95a' : 'rgba(255,253,244,0.95)';
+  ctx.strokeStyle = LINE; ctx.lineWidth = 0.45;
+  // kleine Blasen als „Denk“-Spur, darüber die große
+  for (const [dx, dy, rr] of [[-1.6, r + 2.2, 0.6], [-0.6, r + 0.9, 0.95]]) {
+    ctx.beginPath(); ctx.arc(x + dx, cy + dy, rr, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+  }
+  ctx.beginPath(); ctx.arc(x, cy, r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+  ctx.font = `${urgent ? 5.4 : 4.6}px sans-serif`;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#2a1c14';
+  ctx.fillText(icon, x, cy + 0.4);
+  ctx.restore();
+}
 
 function box(ctx, x, y, w, h, fill, lw = LW) {
   ctx.fillStyle = fill;
