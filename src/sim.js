@@ -77,8 +77,27 @@ function addV2Fields(s) {
 
 export function migrate(s) {
   addV2Fields(s);
+  for (const h of s.heroes) if (!h.bio) rebuildBio(s, h);
   s.version = SAVE_VERSION;
   return s;
+}
+
+// Helden aus Spielständen vor dem Heldenbuch: Lebensgeschichte aus der Chronik rekonstruieren
+const BIO_FROM_LOG = {
+  arrive: ['👋', false], buy: ['🛒', true], level: ['⭐', false], fail: ['🤕', false], escape: ['🧪', true],
+  broken: ['💥', false], social: ['👥', false], herogoal: ['🌟', false], deliver: ['📦', true], party: ['🤝', false],
+};
+
+function rebuildBio(s, h) {
+  h.bio = [{ t: h.arrivedAt ?? 0, c: s.clock0 + s.clockOffset + (h.arrivedAt ?? 0), icon: '👋',
+    text: `Kam als ${className(h.cls, h.female)} nach Eichenfurt – lange bevor das Heldenbuch begonnen wurde.`, you: false }];
+  for (const e of s.log) {
+    const map = BIO_FROM_LOG[e.kind];
+    const mentioned = e.hero === h.id || e.data?.other === h.id;
+    if (!map || !mentioned || e.kind === 'arrive' || (e.kind === 'buy' && e.text.includes('Heiltrank'))) continue;
+    const text = e.text.replace(/\*\*/g, '').replace(/\s*\(\+?[^)]*🪙[^)]*\)\s*$/, '');
+    h.bio.push({ t: e.t, c: e.c ?? s.clock0 + e.t, icon: map[0], text, you: map[1] });
+  }
 }
 
 // ---------- Hilfsfunktionen ----------
