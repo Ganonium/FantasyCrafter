@@ -2,7 +2,7 @@
 // Alles läuft in 1-Minuten-Schritten, damit Offline-Nachberechnung und Live-Spiel identisch sind.
 
 import {
-  MATERIALS, RECIPES, AREAS, TRAITS, TRAIT_CONFLICTS, BUILDINGS,
+  MATERIALS, RECIPES, AREAS, TRAITS, TRAIT_CONFLICTS, BUILDINGS, HERO_CAP, HERO_CLASSES,
   WEAPON_POWER, ARMOR_POWER, NAMES_M, NAMES_F, EPITHETS, fairPrice, className,
 } from './data.js';
 import { makeRng } from './rng.js';
@@ -12,7 +12,7 @@ import { GOALS, PROJECTS } from './goals.js';
 import {
   banter, changeRelation, friendsOf, rivalsOf, findParty, checkHeroGoal, goalAreaBonus, goalDrive, goalThought,
 } from './social.js';
-import { bio, bump, life, checkGrowth, growTrait, traitThreshold, traitDrive, moodBaseline } from './life.js';
+import { bio, bump, life, checkGrowth, growTrait, imprint, traitThreshold, traitDrive, moodBaseline } from './life.js';
 import { processRequests, offerLastItem } from './requests.js';
 import { villagers, villagerMods, hasRole, leaveBitter, ROLES } from './farewell.js';
 import { sagaIntercept, sagaAfterTrip, questArea, processSagas } from './sagas.js';
@@ -53,8 +53,14 @@ export function newGame(seed = Date.now(), clockMinute = 8 * 60) {
   s.mats.eisen = 12; s.mats.holz = 10; s.mats.stoff = 8; s.mats.kraeuter = 6;
   addV2Fields(s);
   const r = makeRng(s);
-  for (const cls of ['krieger', 'waldlaeufer', 'magier']) addHero(s, r, { cls, silent: true });
-  log(s, 'info', 'Willkommen in **Eichenfurt**! Dein Laden hat geöffnet. Drei Helden sitzen schon in der Taverne und warten auf Ausrüstung.');
+  // Sechs Helden, zwei je Klasse – und jede und jeder liebt ein anderes Gebiet
+  const favs = Object.keys(AREAS);
+  for (let i = favs.length - 1; i > 0; i--) { const j = r.int(0, i); [favs[i], favs[j]] = [favs[j], favs[i]]; }
+  for (const cls of HERO_CLASSES) {
+    const firstFemale = r.chance(0.5);
+    for (const female of [firstFemale, !firstFemale]) addHero(s, r, { cls, female, fav: favs.pop(), silent: true });
+  }
+  log(s, 'info', 'Willkommen in **Eichenfurt**! Dein Laden hat geöffnet. Sechs Helden sitzen in der Taverne und warten auf Ausrüstung – für alle zugleich reicht es nicht. Wen stattest du zuerst aus?');
   return s;
 }
 
@@ -208,6 +214,7 @@ export function effectVal(s, key, { area = null, mat = null } = {}) {
   };
   for (const e of s.effects) if (e.until > s.t) e.mods.forEach(apply);
   for (const id of Object.keys(s.projects)) PROJECTS[id].mods.forEach(apply);
+  (BUILDINGS.taverne.levels[s.buildings.taverne - 1].mods ?? []).forEach(apply);
   villagerMods(s).forEach(apply);
   return v;
 }
@@ -274,24 +281,49 @@ export function xpNeeded(level) {
   return Math.round(30 * Math.pow(level, 1.8));
 }
 
-function addHero(s, r, { cls, silent = false, level = 1 } = {}) {
-  const female = r.chance(0.5);
+// Welche Klasse fehlt im Dorf am meisten? (Nachrücker halten das Gleichgewicht: zwei je Klasse)
+function neededClass(s, r) {
+  const count = (c) => s.heroes.filter((h) => h.cls === c).length;
+  const min = Math.min(...HERO_CLASSES.map(count));
+  return r.pick(HERO_CLASSES.filter((c) => count(c) === min));
+}
+
+// Zwei Wesenszüge, die den Helden von den anderen abheben: kein Zug doppelt in derselben Klasse,
+// kein Zug öfter als zweimal im Dorf, kein Paar zweimal
+function pickTraits(s, r, cls) {
+  const ids = Object.keys(TRAITS).filter((t) => !TRAITS[t].acquired);
+  const clash = (a, b) => TRAIT_CONFLICTS.some(([x, y]) => (x === a && y === b) || (x === b && y === a));
+  const uses = (t) => s.heroes.filter((h) => h.traits.includes(t)).length;
+  const mates = s.heroes.filter((h) => h.cls === cls);
+  let best = null;
+  for (let i = 0; i < 40; i++) {
+    const a = r.pick(ids), b = r.pick(ids);
+    if (a === b || clash(a, b)) continue;
+    const penalty = [a, b].reduce((n, t) => n + (mates.some((h) => h.traits.includes(t)) ? 10 : 0) + (uses(t) >= 2 ? 5 : uses(t)), 0)
+      + (s.heroes.some((h) => h.traits.includes(a) && h.traits.includes(b)) ? 10 : 0);
+    if (!best || penalty < best.penalty) best = { pair: [a, b], penalty };
+    if (penalty === 0) break;
+  }
+  return best.pair;
+}
+
+function addHero(s, r, { cls, silent = false, level = 1, female = r.chance(0.5), fav = null } = {}) {
   const used = new Set(s.heroes.map((h) => h.name.split(' ')[0]));
   const pool = (female ? NAMES_F : NAMES_M).filter((n) => !used.has(n));
   const first = r.pick(pool.length ? pool : female ? NAMES_F : NAMES_M);
   const usedEpithets = new Set(s.heroes.map((h) => h.name.split(' ').slice(1).join(' ')));
   const epithets = EPITHETS.filter((e) => !usedEpithets.has(e));
   const name = r.chance(0.35) && epithets.length ? `${first} ${r.pick(epithets)}` : first;
-  cls ??= r.pick(['krieger', 'waldlaeufer', 'magier']);
-
-  const traitIds = Object.keys(TRAITS).filter((t) => !TRAITS[t].acquired);
-  const t1 = r.pick(traitIds);
-  let t2;
-  do { t2 = r.pick(traitIds); } while (t2 === t1 || TRAIT_CONFLICTS.some(([a, b]) => (a === t1 && b === t2) || (a === t2 && b === t1)));
+  cls ??= neededClass(s, r);
+  const [t1, t2] = pickTraits(s, r, cls);
 
   const areaIds = Object.keys(AREAS);
-  const fav = r.pick(areaIds);
-  let hated = r.pick(areaIds.slice(1));
+  // Nachrücker lieben möglichst ein Gebiet, das noch niemand liebt
+  const freeFavs = areaIds.filter((a) => !s.heroes.some((h) => h.fav === a));
+  fav ??= r.pick(freeFavs.length ? freeFavs : areaIds);
+  // … und hassen möglichst eines, das noch niemand hasst
+  const freeHates = areaIds.slice(1).filter((a) => !s.heroes.some((h) => h.hated === a));
+  let hated = r.pick(freeHates.length ? freeHates : areaIds.slice(1));
   if (hated === fav) hated = null;
   if (r.chance(0.3)) hated = null;
 
@@ -400,8 +432,41 @@ export function evaluateAreas(s, h, { power = heroPower(h) } = {}) {
 }
 
 function needsPotionFor(s, h, areaId) {
-  if (h.potions > 0 || has(h, 'uebermuetig') || !scarredIn(s, h, areaId)) return false;
+  // Die Kornfelder bleiben immer offen – sonst säße ein glückloser Neuling ohne Heiltrank für immer fest
+  if (areaId === 'kornfelder' || h.potions > 0 || has(h, 'uebermuetig') || !scarredIn(s, h, areaId)) return false;
   return !(s.shelf.some((it) => it.recipe === 'heiltrank') && h.gold >= priceOf(s, 'heiltrank'));
+}
+
+// ---------- Warten auf Ausrüstung ----------
+
+export function gearSum(h) {
+  return (h.weapon ? RECIPES[h.weapon].tier : 0) + (h.armor ? RECIPES[h.armor].tier : 0);
+}
+
+// Ist der Held bei der Ausrüstung das Schlusslicht – weil nichts Passendes im Regal liegt
+// oder weil er es sich nicht leisten kann (broke)?
+// inWork: Etwas Passendes ist schon in Arbeit – dann hält er noch durch.
+export function waitingForGear(s, h) {
+  const others = s.heroes.filter((o) => o !== h);
+  // Nur die Schlusslichter: schlechter als die Bestgerüsteten und niemand ist schlechter dran
+  const sums = others.map(gearSum);
+  if (!others.length || gearSum(h) >= Math.max(...sums) || gearSum(h) > Math.min(...sums)) return null;
+  const fits = (id) => {
+    const rc = RECIPES[id];
+    return rc.cls === h.cls && (rc.slot === 'weapon' || rc.slot === 'armor') && rc.tier > (h[rc.slot] ? RECIPES[h[rc.slot]].tier : 0);
+  };
+  const onShelf = s.shelf.filter((it) => fits(it.recipe));
+  if (onShelf.some((it) => canAfford(h, priceOf(s, it.recipe)))) return null;
+  if (onShelf.length) return { inWork: false, broke: true };
+  return { inWork: s.queue.some(fits) || s.slots.some((j) => j && fits(j.recipe)) };
+}
+
+// Wie lange hält der Held das Warten aus? (in „gewarteten“ Spielminuten, nur tagsüber in der Taverne)
+export function patience(h) {
+  let p = 150;
+  if (has(h, 'eifrig') || has(h, 'mutig') || has(h, 'ruhmsuechtig')) p *= 0.6;
+  if (has(h, 'vorsichtig') || has(h, 'faul')) p *= 1.7;
+  return p;
 }
 
 function sellToHero(s, h, recipe, price, idx) {
@@ -518,6 +583,17 @@ function think(s, r, h) {
 
   const evals = evaluateAreas(s, h);
   const feasible = evals.filter((e) => !e.block).sort((a, b) => b.value - a.value);
+
+  // Warten auf Ausrüstung: Niemand wartet ewig. Wer genug hat, wagt sich mit dem alten Zeug weiter hinaus.
+  const wait = waitingForGear(s, h);
+  if (!wait) h.waited = 0;
+  else {
+    h.waited = (h.waited ?? 0) + 28;
+    if (!wait.inWork && h.waited >= patience(h) && r.chance(0.3)) {
+      const dare = evals.filter((e) => e.block === 'danger' && e.p >= 0.3).sort((a, b) => b.p - a.p)[0];
+      if (dare) { departDaring(s, r, h, dare, !!wait.broke); return; }
+    }
+  }
   const topBounty = evals.filter((e) => e.bountyValue > 0).sort((a, b) => b.bountyValue - a.bountyValue)[0];
   const best = feasible[0];
 
@@ -575,7 +651,8 @@ function think(s, r, h) {
   }
   if (!go) {
     const memory = r.chance(0.3) ? memoryThought(h, r) : null;
-    if (memory) setThought(h, memory, '💭');
+    if (wait && !wait.broke && r.chance(0.6)) setThought(h, r.pick(wait.inWork ? THOUGHTS.waitInWork : THOUGHTS.waitGear), '⏳');
+    else if (memory) setThought(h, memory, '💭');
     else if (h.gold > 400 + h.level * 60) setThought(h, THOUGHTS.rich[0], '💰');
     else if (h.mood < 30) setThought(h, r.pick(THOUGHTS.moody), '😠');
     else if (h.goal && r.chance(0.45)) setThought(h, goalThought(s, r, h), '🌟');
@@ -594,6 +671,9 @@ function sendAway(s, r, h, ev, until) {
   h.until = until;
   h.bountyTrip = ev.bountyValue > 0;
   h.chance = ev.p;
+  // Für die Prägung: Zog der Held los, obwohl er bei der Ausrüstung hinterherhinkt?
+  h.tripUnderdog = !!waitingForGear(s, h);
+  h.tripDaring = false;
   // Folgt der Held deinem Zuspruch? Dann wird das Ergebnis dir zugeschrieben
   h.advisedTrip = h.advice?.type === 'encouraged' && h.advice.area === ev.id && h.advice.until > s.t;
   if (h.advisedTrip) h.advice = null;
@@ -619,6 +699,21 @@ function departParty(s, r, h, f, ev, bold) {
   }
   setThought(h, fmt('Zusammen mit {o} {zu}!', h, { ...v, o: f.name }));
   setThought(f, fmt('Zusammen mit {o} {zu}!', f, { ...v, o: h.name }));
+}
+
+// Das Wagnis: Der Held hat das Warten satt und zieht in ein Gebiet, das ihm eigentlich zu gefährlich ist
+function departDaring(s, r, h, dare, waitingForGearBroke = false) {
+  sendAway(s, r, h, dare, s.t + tripDuration(s, r, dare.id));
+  h.tripDaring = true;
+  h.waited = 0;
+  const v = areaVars(dare.id);
+  const broke = waitingForGearBroke;
+  const tpl = dare.id === 'kornfelder' ? say(s, r, 'departEasy', T.departDaringEasy)
+    : broke ? say(s, r, 'departBroke', T.departBroke) : say(s, r, 'departDaring', T.departDaring);
+  log(s, 'depart', fmt(tpl, h, v), h.id, { daring: true });
+  bio(s, h, '⏳', broke ? `Konnte sich keine bessere Ausrüstung leisten und wagte sich trotzdem ${AREAS[dare.id].zu}.`
+    : `Hatte das Warten auf bessere Ausrüstung satt und wagte sich ${AREAS[dare.id].zu}.`, !broke);
+  setThought(h, fmt(r.pick(THOUGHTS.daring), h, v));
 }
 
 function departSolo(s, r, h, best) {
@@ -688,7 +783,8 @@ function returnHome(s, r, h, opts = {}) {
   const success = roll < h.chance;
   // Die Chronik erzählt nur, was dich betrifft: Kopfgeld-Ausflüge und Niederlagen.
   // Ein gewöhnlicher, erfolgreicher Ausflug läuft still im Hintergrund.
-  const notable = !opts.quiet && (h.bountyTrip || !success);
+  const notable = !opts.quiet && (h.bountyTrip || !success || h.tripDaring);
+  const trip = { success, p: h.chance, underdog: !!h.tripUnderdog, daring: !!h.tripDaring, geared: !!(h.weapon || h.armor), heavy: false };
 
   // eine kleine Geschichte von unterwegs
   const tales = h.area === 'drachenhorst' && dragonSlain ? 'drachenhorstDanach' : h.area;
@@ -751,6 +847,7 @@ function returnHome(s, r, h, opts = {}) {
     // Abgehärtete stecken Niederlagen besser weg
     changeMood(h, has(h, 'abgehaertet') ? -7 : -14);
     life(h).winStreak = 0;
+    trip.heavy = true;
     bump(h, 'heavyDefeats');
     bump(h, 'injuries');
     bio(s, h, '🤕', `Kam schwer verletzt ${a.aus} zurück.`);
@@ -811,7 +908,8 @@ function returnHome(s, r, h, opts = {}) {
     else h.gold += pieces * Math.round(MATERIALS[a.mat].value * 0.3);
   }
   // Taverne kostet
-  const tavern = Math.min(h.gold, 4 + h.level * 2);
+  // Wer knapp bei Kasse ist, bei dem drückt der Wirt ein Auge zu
+  const tavern = Math.min(h.gold, h.gold < 30 ? 2 : 4 + h.level * 2);
   h.gold -= tavern;
   const tripArea = h.area;
   h.area = null;
@@ -821,7 +919,9 @@ function returnHome(s, r, h, opts = {}) {
   if (mentor && h.level >= mentor.level - 1) graduate(s, r, h, mentor);
   repayDebt(s, h);
   checkHeroGoal(s, r, h);
-  checkGrowth(s, r, h);
+  if (success && trip.daring) changeMood(h, 6);
+  h.tripUnderdog = h.tripDaring = false;
+  if (!imprint(s, r, h, trip)) checkGrowth(s, r, h);
 }
 
 // Ein Lehrling hat ausgelernt – und nimmt vielleicht etwas vom Wesen des Lehrmeisters mit
@@ -1126,7 +1226,7 @@ function eventApi(s, r) {
     removeEffect: (tag) => { s.effects = s.effects.filter((e) => e.tag !== tag); },
     moodAll: (d) => { for (const h of s.heroes) changeMood(h, d); },
     addHero: (level) => {
-      if (s.heroes.length >= building(s, 'taverne').heroes) return null;
+      if (s.heroes.length >= HERO_CAP) return null;
       const h = addHero(s, r, { level: Math.min(10, level), silent: true });
       bio(s, h, '✋', 'Lag verwundet am Wegesrand – du hast geholfen, und so blieb ' + (h.female ? 'sie' : 'er') + ' in Eichenfurt.', true);
       return h;
@@ -1239,10 +1339,6 @@ export function upgrade(s, id) {
   s.buildings[id]++;
   if (id === 'schmiede') while (s.slots.length < building(s, 'schmiede').slots) s.slots.push(null);
   log(s, 'build', `${BUILDINGS[id].icon} **${BUILDINGS[id].name}** ausgebaut auf Stufe ${s.buildings[id]}.`);
-  if (id === 'taverne') {
-    s.guestDue = s.t + makeRng(s).int(60, 180);
-    log(s, 'build', 'Es spricht sich herum: In der Taverne von Eichenfurt sind Zimmer frei.');
-  }
   return true;
 }
 
@@ -1289,8 +1385,8 @@ function stepMinute(s, r) {
 
   if (s.t >= s.nextArrival) {
     s.nextArrival = s.t + 60;
-    const cap = building(s, 'taverne').heroes;
-    // Nach einem Taverne-Ausbau kommt garantiert bald jemand; sonst entscheidet der Ruf
+    const cap = HERO_CAP;
+    // Nach einem Abschied kommt garantiert bald jemand nach; sonst entscheidet der Ruf
     const due = s.guestDue !== null && s.t >= s.guestDue;
     if (s.heroes.length < cap && !isNight(s) && (due || r.chance(arrivalChance(s)))) {
       s.guestDue = null;

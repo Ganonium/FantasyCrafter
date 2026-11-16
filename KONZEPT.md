@@ -33,6 +33,13 @@ Drachen traut, gibt es keine Drachenschuppen. Genauso fehlt die Spinnenseide, we
 
 ## Helden mit Eigenleben
 
+**Sechs Helden von Anfang an, zwei je Klasse** (`HERO_CAP` in `src/data.js`). Mehr werden es nicht – dafür soll jede
+und jeder unverwechselbar sein: Die beiden einer Klasse teilen keinen Wesenszug, kein Zug kommt im Dorf öfter als
+zweimal vor, und alle lieben und hassen möglichst verschiedene Gebiete. Geht jemand, rückt die fehlende Klasse nach.
+
+Weil du anfangs nicht alle zugleich ausstatten kannst, entscheidet deine Reihenfolge in der Werkstatt mit darüber,
+was die Helden erleben – und damit, wer sie werden (siehe „Warten auf Ausrüstung“ und „Wesenswandel“).
+
 | Eigenschaft | Wirkung |
 |---|---|
 | **Klasse** (Krieger, Waldläufer, Magier) | kauft nur passende Waffen und Rüstungen; Waldläufer bringen mehr Beute mit, Krieger heilen schneller |
@@ -136,7 +143,7 @@ gefährlich), Magier Kräuterkundige (Verletzungen heilen 10 %, Heiltränke brau
 Hintergrund der Dorfszene, geben manchmal Bestellungen auf und sind im Tab „Dorf“ aufgeführt.
 
 Die **Dorfchronik** (Tab „Dorf“) bewahrt jeden Helden, der einmal hier war: Stufe, Schicksal, Zeit im Dorf und die
-wichtigsten Seiten seines Heldenbuchs. Ein freies Zimmer zieht bald einen neuen Helden an.
+wichtigsten Seiten seines Heldenbuchs. Ein freies Zimmer zieht bald einen neuen Helden der fehlenden Klasse an.
 
 ## Mehrtägige Geschichten
 
@@ -173,16 +180,43 @@ Tage Zeit, sich zu rüsten – dann stellen sich alle Helden, die im Dorf sind, 
 😨 traut sich nicht, 🧪 braucht einen Heiltrank, 🌟 träumt vom Wunsch, 💭 erinnert sich, 💢 ärgert sich über den Rivalen,
 💛 sorgt sich um einen Freund, 🍺 hat keine Lust, ❗ wartet an deinem Tresen.
 
+## Warten auf Ausrüstung
+
+Ein Held „hinkt hinterher“ (⏳), wenn er zu den am schlechtesten Gerüsteten gehört, andere besser dastehen und für ihn
+nichts Passendes im Regal liegt – oder er es sich nicht leisten kann. Niemand wartet ewig:
+
+- Ist etwas Passendes **in Arbeit**, hält er durch („In der Werkstatt wird schon für mich gehämmert.“).
+- Sonst reißt nach einiger Zeit die Geduld (Eifrige, Mutige, Ruhmsüchtige früher; Vorsichtige, Faule später). Dann
+  **wagt** er sich in ein Gebiet, das ihm eigentlich zu gefährlich ist (mindestens 30 % Chance) – mit Eintrag in
+  Chronik und Heldenbuch.
+- Das ist kein Todesurteil, sondern ein anderer Weg: Ein Sieg dort bringt Gold, Erfahrung und vielleicht Mut, eine
+  Niederlage vielleicht Vorsicht. Wer knapp bei Kasse ist, zahlt in der Taverne fast nichts, und die Kornfelder
+  bleiben auch nach einer Verletzung ohne Heiltrank offen – niemand sitzt fest.
+
 ## Wesenswandel
 
-Wesenszüge sind nicht fest. Erlebnisse – und deine Entscheidungen – verändern sie (🌱 in Chronik und Heldenbuch):
+Wesenszüge sind nicht fest. Erlebnisse – und deine Entscheidungen – verändern sie (🌱 in Chronik und Heldenbuch).
+
+**Prägung durch Abenteuer ist immer eine Chance, nie sicher** (`imprintChances` in `src/life.js`). Du verschiebst nur
+die Wahrscheinlichkeiten; die Heldenkarte zeigt unter „Was … prägen könnte“ die aktuellen Werte.
+
+| Erlebnis | mögliche Prägung | Chance |
+|---|---|---|
+| Sieg bei unter 60 % Erfolgschance oder bei einem Wagnis | **mutig** | 10 % (Wagnis 18 %) |
+| früher, glatter Sieg mit Ausrüstung von dir | **eifrig** | 12 % |
+| ab fünf echten Siegen in Folge | **übermütig**: unterschätzt Gefahren, kauft keine Heiltränke – bis zur ersten schweren Niederlage | 12 % je Sieg über vier |
+| schwere Niederlage ohne Heiltrank (Siege lassen sie verblassen) | **vorsichtig** | 15 % je Niederlage |
+| ab der dritten Verletzung | **abgehärtet**: heilt schneller, Niederlagen drücken die Laune weniger | 12 % je Verletzung über zwei |
+
+- Die **ersten sechs Abenteuer** prägen anderthalbmal so stark.
+- Jeder andere Held, der einen Zug schon hat, **halbiert** die Chance darauf – das Dorf bleibt bunt.
+- Höchstens eine Prägung pro Abenteuer.
+
+Fest ausgelöst werden weiterhin:
 
 | Auslöser | Wandel |
 |---|---|
-| drei schwere Niederlagen ohne Heiltrank (Siege lassen sie verblassen) | wird **vorsichtig** |
 | dein Zuspruch hat sich ausgezahlt (bei Vorsichtigen schon einmal) | wird **mutig** |
-| fünf Verletzungen | wird **abgehärtet**: heilt schneller, Niederlagen drücken die Laune weniger |
-| acht echte Siege in Folge | wird **übermütig**: unterschätzt Gefahren, kauft keine Heiltränke – bis zur ersten schweren Niederlage |
 | dein Rat führte zweimal ins Unglück, oder Enttäuschungen (Freund verloren) | wird **verbittert**: schlechter gelaunt, streitlustiger – heilbar durch erfüllte Träume und gute Erfahrungen |
 | drei erfüllte Träume (nach ein paar Tagen im Dorf) | wird **zufrieden**: kaum noch schlecht gelaunt, aber weniger Tatendrang |
 | zwei echte Freundschaften | wird **gesellig** |

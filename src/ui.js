@@ -1,19 +1,20 @@
 // Oberfläche: Tabs, Dialoge und Aktionen. Alles wird aus dem Spielstand neu gerendert.
 
 import {
-  MATERIALS, RECIPES, AREAS, TRAITS, BUILDINGS, CLASSES, fairPrice, className,
+  MATERIALS, RECIPES, AREAS, TRAITS, BUILDINGS, CLASSES, HERO_CAP, fairPrice, className,
 } from './data.js';
 import {
   clockOf, building, heroPower, successChance, evaluateAreas, priceOf, xpNeeded, canCraft, queueCraft,
   cancelQueued, sellFromShelf, sellAllFromShelf, postBounty, cancelBounty, upgradeCost, canUpgrade, upgrade,
   logClock, activeEffects, resolveEvent, eventCost, canPay, acceptOrder, declineOrder, fillOrderFromShelf, currentGoal,
-  buildProject, prioritizeQueued, canAfford, craftCost, missingRare, powerWith, gearPower, arrivalChance, craftTime, matPrice, areaDanger, afterAction,
+  buildProject, prioritizeQueued, canAfford, craftCost, missingRare, powerWith, gearPower, arrivalChance, craftTime, matPrice, areaDanger, afterAction, waitingForGear, patience,
 } from './sim.js';
 import { EVENT_BY_ID } from './events.js';
 import { goalProgress, friendsOf, rivalsOf, wantsRecipe, relation } from './social.js';
 import { REQUESTS, requestOptions, resolveRequest, requestFor, requestMeta } from './requests.js';
 import { PREPS, threatDef, prepCost, buyPrep, fighters, guards, villageStrength, threatOdds } from './threat.js';
 import { memoryLines, trustLabel } from './memory.js';
+import { imprintChances, isEarly } from './life.js';
 import { ROLES, FATE_LABEL, villagers, legacyTitle, farewellMood } from './farewell.js';
 import { GOALS, PROJECTS } from './goals.js';
 import { renderPortrait } from './sprites.js';
@@ -392,7 +393,7 @@ export class UI {
   }
 
   tab_helden(s) {
-    const cap = building(s, 'taverne').heroes;
+    const cap = HERO_CAP;
     const cards = s.heroes.map((h) => `<div class="hero card" data-act="hero" data-id="${h.id}">
       <canvas class="mini" width="54" height="81" data-portrait="${h.id}"></canvas>
       <div class="hinfo"><div class="row"><b>${esc(h.name)}</b><span>${moodIcon(h.mood)} ${Math.floor(h.gold)} 🪙</span></div>
@@ -405,9 +406,9 @@ export class UI {
     const free = cap - s.heroes.length;
     const hours = Math.max(1, Math.round(1 / arrivalChance(s)));
     const info = free > 0
-      ? `<p class="small dim">🛏️ ${free} ${free === 1 ? 'Zimmer' : 'Zimmer'} frei. ${s.guestDue !== null ? 'Es hat sich herumgesprochen – bald kommt jemand.' : `Neue Helden kommen tagsüber, bei deinem Ruf (${s.reputation}) etwa alle ${hours} Std.`}</p>`
-      : '<p class="small dim">🛏️ Die Taverne ist voll. Für mehr Helden die Taverne ausbauen.</p>';
-    return `<section><h2>Helden <span class="dim small">${s.heroes.length}/${cap}</span></h2>${info}${cards}</section>`;
+      ? `<p class="small dim">🛏️ ${free} Zimmer frei. ${s.guestDue !== null ? 'Es hat sich herumgesprochen – bald rückt jemand nach.' : `Nachrücker kommen tagsüber, bei deinem Ruf (${s.reputation}) etwa alle ${hours} Std.`}</p>`
+      : `<p class="small dim">Sechs Helden leben in Eichenfurt, zwei je Klasse. Was sie erleben, prägt sie – und was sie erleben, hängt auch davon ab, wen du zuerst ausstattest.</p>`;
+    return `<section><h2>Helden <span class="dim small">${s.heroes.length}</span></h2>${info}${cards}</section>`;
   }
 
   goalLine(s, h) {
@@ -571,6 +572,7 @@ export class UI {
         ${h.traits.map((t) => `<div class="small">${TRAITS[t].acquired || (h.grown ?? []).includes(t) ? '🌱 ' : ''}<b>${TRAITS[t].name}</b> – ${TRAITS[t].desc}</div>`).join('')}
         ${this.statusLines(s, h)}
         <div class="small">Liebt: ${AREAS[h.fav].icon} ${AREAS[h.fav].name}${h.hated ? ` · Hasst: ${AREAS[h.hated].icon} ${AREAS[h.hated].name}` : ''}</div>
+        ${this.shapingHtml(s, h)}
         <h3>Wunsch</h3>${this.goalLine(s, h) || '<p class="small dim">Gerade wunschlos glücklich.</p>'}
         ${h.goalsDone ? `<div class="small dim">Schon ${h.goalsDone}× einen Traum erfüllt.</div>` : ''}
         <h3>Beziehungen</h3>${this.relationsHtml(s, h)}
@@ -597,6 +599,24 @@ export class UI {
     };
   }
 
+  // Prägung: Wohin könnte sich der Held nach dem nächsten Abenteuer entwickeln?
+  shapingHtml(s, h) {
+    const first = esc(h.name.split(' ')[0]);
+    const c = h.life ?? {};
+    const best = evaluateAreas(s, h).filter((e) => !e.block).sort((a, b) => b.value - a.value)[0];
+    const ctx = { p: best?.p ?? 0.5, underdog: !!waitingForGear(s, h), daring: false, geared: !!(h.weapon || h.armor) };
+    const after = (extra) => ({ ...h, adventures: h.adventures + 1, life: { ...c, ...extra } });
+    const win = imprintChances(s, after({ winStreak: (c.winStreak ?? 0) + (ctx.p < 0.85 ? 1 : 0) }), { ...ctx, success: true });
+    const loss = imprintChances(s, after({ heavyDefeats: (c.heavyDefeats ?? 0) + 1, injuries: (c.injuries ?? 0) + 1 }), { ...ctx, success: false, heavy: true });
+    const line = (label, list) => list.map((o) => `<div class="row small"><span>${label}: wird vielleicht <b>${TRAITS[o.trait].name.toLowerCase()}</b></span>
+      <span class="${o.p >= 0.25 ? 'ok' : 'dim'}">${Math.max(1, Math.round(o.p * 100))} %</span></div>`).join('');
+    const rows = line('Nach einem Sieg', win) + line('Nach einer schweren Niederlage', loss);
+    const early = isEarly(h) ? `<div class="small dim">Die ersten Abenteuer prägen besonders – ${first} steht noch am Anfang.</div>` : '';
+    return `<h3>Was ${first} prägen könnte</h3>${early}
+      ${rows || '<div class="small dim">Im Moment deutet nichts auf einen Wandel hin.</div>'}
+      ${ctx.underdog ? `<div class="small dim">⏳ ${first} hinkt bei der Ausrüstung hinterher. Wer zu lange wartet, wagt sich trotzdem weiter hinaus – ein Sieg dort macht eher mutig, eine Niederlage eher vorsichtig.</div>` : ''}`;
+  }
+
   // Besondere Umstände: Rat, Lehre, Schulden, Wettstreit
   // Verhältnis zu dir und die prägenden Erinnerungen
   memoryHtml(h) {
@@ -614,6 +634,12 @@ export class UI {
     const out = [];
     const waiting = requestFor(s, h.id);
     if (waiting) out.push(`🙋 Wartet an deinem Tresen: ${requestMeta(waiting).title}`);
+    const wait = h.state === 'idle' ? waitingForGear(s, h) : null;
+    if (wait) out.push(wait.broke ? ((h.waited ?? 0) >= patience(h) ? '⏳ Kann sich die Ausrüstung im Regal nicht leisten – wagt sich bald weiter hinaus, um Gold zu holen'
+      : '⏳ Hinkt hinterher: Die passende Ausrüstung im Regal ist zu teuer')
+      : wait.inWork ? '⏳ Wartet auf Ausrüstung – in der Werkstatt ist schon etwas in Arbeit'
+      : (h.waited ?? 0) >= patience(h) ? '⏳ Hat das Warten auf Ausrüstung satt – wagt sich bald trotzdem weiter hinaus'
+        : '⏳ Wartet auf Ausrüstung: Andere sind besser gerüstet, im Regal liegt nichts Passendes');
     if (h.quest && !h.quest.search && h.quest.until > s.t) out.push(`📜 Hat etwas vor: ${AREAS[h.quest.area].icon} ${AREAS[h.quest.area].name}`);
     if (s.threat && h.threatRole) out.push(h.threatRole === 'guard' ? '🛡️ Schützt beim Kampf das Dorf' : '⚔️ Kämpft an vorderster Front');
     if (h.advice && h.advice.until > s.t) {

@@ -15,6 +15,21 @@ export function fmt(tpl, hero, vars = {}) {
 }
 
 export const T = {
+  departDaring: [
+    '⏳ {n} hat das Warten satt. „Dann eben mit dem alten Zeug.“ Und zieht {zu}.',
+    '⏳ {n} schaut ein letztes Mal ins leere Regal, zuckt die Schultern und bricht {zu} auf – schlecht gerüstet, aber entschlossen.',
+    '⏳ „Wenn für mich nichts dabei ist, hole ich es mir eben selbst.“ {n} wagt sich {zu}.',
+    '⏳ Alle anderen haben neue Sachen. {n} nicht – und zieht trotzdem {zu}.',
+  ],
+  departDaringEasy: [
+    '⏳ {n} wollte eigentlich auf bessere Ausrüstung warten. Aber Herumsitzen füllt den Beutel nicht – also doch {zu}.',
+    '⏳ {n} ist das Warten leid und versucht es eben so {in}.',
+  ],
+  departBroke: [
+    '⏳ {n} fehlt das Gold für bessere Ausrüstung. „Dann hole ich es mir eben.“ Und zieht {zu}.',
+    '⏳ {n} zählt die letzten Münzen, seufzt und wagt sich {zu} – irgendwoher muss das Gold ja kommen.',
+    '⏳ Zu arm für neue Ausrüstung, zu stolz zum Betteln: {n} zieht {zu}.',
+  ],
   depart: [
     '{n} schnürt die Stiefel und zieht {zu}.',
     '{n} verlässt das Dorf Richtung {A}.',
@@ -250,6 +265,10 @@ export const THOUGHTS = {
   },
   rivalAhead: ['Pah! {o} hält sich für was Besseres. Das kann ich auch.', '{o} schon wieder. Dem zeig ich\'s.'],
   friendHurt: ['Ich mach mir Sorgen um {o}.'],
+  waitGear: ['Alle kriegen neue Sachen. Nur für mich ist nie was dabei.', 'Wann liegt endlich mal was für mich im Regal?',
+    'Lange warte ich nicht mehr. Dann geh ich eben so.'],
+  waitInWork: ['In der Werkstatt wird schon für mich gehämmert. So lange halte ich noch durch.', 'Bald ist mein neues Stück fertig. Ich kann warten.'],
+  daring: ['Dann eben ohne. {zu} – jetzt erst recht!', 'Wird schon schiefgehen. Auf {zu}!'],
   night: ['Zzz …', 'Nachts zieht doch niemand los.', 'Morgen früh vielleicht.'],
   tooDangerous: [
     '{A}? Mit dieser Ausrüstung? Da bräuchte ich schon Besseres.',

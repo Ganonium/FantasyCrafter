@@ -50,6 +50,10 @@ const GROWTH_TEXT = {
     '{n} hat sich Träume erfüllt und wirkt rundum zufrieden.',
     'Ein Lächeln liegt jetzt oft auf dem Gesicht von {n}. {Er} ist angekommen.',
   ],
+  eifrig: [
+    'Der frühe Erfolg hat {n} Lust auf mehr gemacht. Stillsitzen ist nichts mehr für {ihn}.',
+    '{n} hat Blut geleckt – kaum zurück, will {er} schon wieder los.',
+  ],
   gesellig: [
     'Durch die neuen Freunde ist {n} richtig aufgetaut.',
     '{n} ist jetzt der Mittelpunkt jeder Runde in der Taverne.',
@@ -89,17 +93,6 @@ export function checkGrowth(s, r, h) {
   const c = life(h);
   const has = (t) => h.traits.includes(t);
 
-  if ((c.heavyDefeats ?? 0) >= 3 && !has('vorsichtig')) {
-    growTrait(s, r, h, 'vorsichtig', 'nach drei schweren Niederlagen');
-    c.heavyDefeats = 0;
-  }
-  if ((c.injuries ?? 0) >= 5 && !has('abgehaertet')) {
-    growTrait(s, r, h, 'abgehaertet', 'nach unzähligen Verletzungen');
-  }
-  if ((c.winStreak ?? 0) >= 8 && !has('uebermuetig') && !has('vorsichtig')) {
-    growTrait(s, r, h, 'uebermuetig', 'nach acht echten Siegen in Folge');
-    c.winStreak = 0; c.heavyDefeats = 0;
-  }
   // Dein Zuspruch kann Vorsicht in Mut verwandeln
   if ((c.goodAdvice ?? 0) >= (has('vorsichtig') ? 1 : 2) && !has('mutig')) {
     growTrait(s, r, h, 'mutig', 'weil dein Zuspruch sich ausgezahlt hat', true);
@@ -126,6 +119,61 @@ export function checkGrowth(s, r, h) {
     loseTrait(s, h, 'uebermuetig', 'Die Niederlage hat gesessen: Der Übermut ist {n} vergangen.');
     c.winStreak = 0;
   }
+}
+
+// ---------- Prägung: Erlebnisse formen den Charakter – nie sicher, immer nur mit einer Chance ----------
+
+const EARLY_TRIPS = 6; // die ersten Abenteuer prägen besonders
+const clamp = (p) => Math.max(0, Math.min(0.6, p));
+export const isEarly = (h) => h.adventures <= EARLY_TRIPS;
+
+// Wohin könnte sich der Held gerade entwickeln? Dieselben Chancen nutzt imprint() nach einem Abenteuer,
+// die Heldenkarte zeigt sie als Tendenz. ctx beschreibt den Ausflug (oder den erwarteten nächsten).
+// Je mehr andere Helden einen Zug schon haben, desto unwahrscheinlicher wird er – das Dorf bleibt bunt.
+export function imprintChances(s, h, ctx) {
+  const c = life(h);
+  const has = (t) => h.traits.includes(t);
+  const early = isEarly(h) ? 1.5 : 1;
+  const raw = [];
+  const out = { push: (o) => raw.push({ ...o, p: o.p * 0.5 ** s.heroes.filter((x) => x.id !== h.id && x.traits.includes(o.trait)).length }) };
+  if (ctx.success) {
+    const hard = ctx.daring || ctx.p < 0.6;
+    if (hard && !has('mutig')) {
+      out.push({ trait: 'mutig', p: clamp((0.1 + (ctx.daring ? 0.08 : 0)) * early), you: ctx.underdog || ctx.daring,
+        reason: ctx.underdog || ctx.daring ? 'weil es auch ohne die ersehnte Ausrüstung gut ging' : 'nach einem Sieg gegen jede Wahrscheinlichkeit' });
+    }
+    if (!hard && isEarly(h) && ctx.geared && !has('eifrig') && !has('zufrieden')) {
+      out.push({ trait: 'eifrig', p: clamp(0.12), you: true, reason: 'weil der Start mit deiner Ausrüstung so gut gelang' });
+    }
+    const streak = c.winStreak ?? 0;
+    if (streak >= 5 && !has('uebermuetig') && !has('vorsichtig')) {
+      out.push({ trait: 'uebermuetig', p: clamp((streak - 4) * 0.12), reason: `nach ${streak} echten Siegen in Folge`, reset: ['winStreak', 'heavyDefeats'] });
+    }
+  } else if (ctx.heavy) {
+    const defeats = c.heavyDefeats ?? 0;
+    if (defeats >= 1 && !has('vorsichtig')) {
+      out.push({ trait: 'vorsichtig', p: clamp(0.15 * defeats * early), you: ctx.underdog || ctx.daring,
+        reason: ctx.underdog || ctx.daring ? 'nach einer Niederlage mit unzureichender Ausrüstung' : defeats >= 2 ? 'nach mehreren schweren Niederlagen' : 'nach einer schweren Niederlage',
+        reset: ['heavyDefeats'] });
+    }
+    const injuries = c.injuries ?? 0;
+    if (injuries >= 3 && !has('abgehaertet')) {
+      out.push({ trait: 'abgehaertet', p: clamp(0.12 * (injuries - 2)), reason: 'nach etlichen Verletzungen' });
+    }
+  }
+  return raw;
+}
+
+// Nach jedem Abenteuer: höchstens eine Prägung, ausgewürfelt
+export function imprint(s, r, h, ctx) {
+  for (const o of imprintChances(s, h, ctx)) {
+    if (!r.chance(o.p)) continue;
+    if (growTrait(s, r, h, o.trait, o.reason, !!o.you)) {
+      for (const k of o.reset ?? []) life(h)[k] = 0;
+      return o.trait;
+    }
+  }
+  return null;
 }
 
 // Wirkung der erworbenen Wesenszüge auf die Mutschwelle und die Lust loszuziehen

@@ -6,7 +6,7 @@
 // options[].cost(s, d)  → { gold, mats: {}, potion } (optional)
 // options[].apply(s, r, api, d) → Ergebnistext für die Chronik
 
-import { MATERIALS, AREAS } from './data.js';
+import { MATERIALS, AREAS, HERO_CAP } from './data.js';
 
 const H = 60;
 const mat = (m) => `${MATERIALS[m].icon} ${MATERIALS[m].name}`;
@@ -179,6 +179,7 @@ export const EVENTS = [
   },
   {
     id: 'fremder', icon: '🤕', title: 'Verletzter Fremder', weight: 2,
+    cond: (s) => s.heroes.length < HERO_CAP,
     text: () => 'Am Wegesrand liegt ein verwundeter Abenteurer. Mit Hilfe könnte er wieder auf die Beine kommen.',
     options: [
       {
