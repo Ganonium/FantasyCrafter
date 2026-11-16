@@ -120,6 +120,10 @@ export const TRAIT_CONFLICTS = [
   ['uebermuetig', 'vorsichtig'], ['verbittert', 'zufrieden'], ['verbittert', 'gesellig'], ['zufrieden', 'eifrig'],
 ];
 
+// So viele Helden leben in Eichenfurt – von Anfang an, zwei je Klasse
+export const HERO_CAP = 6;
+export const HERO_CLASSES = ['krieger', 'waldlaeufer', 'magier'];
+
 export const BUILDINGS = {
   schmiede: {
     name: 'Schmiede', icon: '🔨',
@@ -141,9 +145,10 @@ export const BUILDINGS = {
   taverne: {
     name: 'Taverne', icon: '🍺',
     levels: [
-      { desc: 'Platz für 4 Helden', heroes: 4 },
-      { desc: 'Platz für 6 Helden', heroes: 6, cost: { gold: 300 } },
-      { desc: 'Platz für 8 Helden', heroes: 8, cost: { gold: 1200, spinnenseide: 4 } },
+      { desc: 'Einfache Zimmer für sechs Helden' },
+      { desc: 'Bessere Betten: Helden ruhen sich 15 % schneller aus', cost: { gold: 300 }, mods: [{ key: 'rest', v: 0.85 }] },
+      { desc: 'Kaminstube: 30 % schnellere Erholung und bessere Laune', cost: { gold: 1200, spinnenseide: 4 },
+        mods: [{ key: 'rest', v: 0.7 }, { key: 'moodHour', v: 1 }] },
     ],
   },
 };
